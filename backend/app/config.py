@@ -1,0 +1,131 @@
+"""Application configuration."""
+
+from functools import lru_cache
+from typing import Optional
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Application
+    app_name: str = Field(default="Doctor Agent API", description="Application name")
+    app_version: str = Field(default="0.1.0", description="Application version")
+    environment: str = Field(default="development", description="Environment")
+    debug: bool = Field(default=False, description="Debug mode")
+
+    # OpenAI
+    openai_api_key: Optional[str] = Field(
+        default=None, description="OpenAI API key (from Secrets Manager in prod)"
+    )
+    openai_model: str = Field(
+        default="gpt-4o-mini", description="OpenAI model for chat"
+    )
+    openai_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    openai_max_tokens: int = Field(default=600, ge=1, le=4096)
+    openai_timeout: int = Field(default=30, description="OpenAI API timeout in seconds")
+
+    # OpenAI Embeddings
+    openai_embedding_model: str = Field(
+        default="text-embedding-3-small", description="OpenAI embedding model"
+    )
+    openai_embedding_dimensions: int = Field(
+        default=1536, description="Embedding dimensions"
+    )
+
+    # AWS
+    aws_region: str = Field(default="us-east-1", description="AWS region")
+    aws_access_key_id: Optional[str] = Field(default=None, description="AWS access key")
+    aws_secret_access_key: Optional[str] = Field(
+        default=None, description="AWS secret key"
+    )
+
+    # DynamoDB
+    dynamodb_table_conversations: str = Field(
+        default="doctor-agent-conversations", description="Conversations table name"
+    )
+    dynamodb_table_messages: str = Field(
+        default="doctor-agent-messages", description="Messages table name"
+    )
+    dynamodb_table_agents: str = Field(
+        default="doctor-agent-agents", description="Agents table name"
+    )
+    dynamodb_table_audit_logs: str = Field(
+        default="doctor-agent-audit-logs", description="Audit logs table name"
+    )
+    dynamodb_endpoint_url: Optional[str] = Field(
+        default=None, description="DynamoDB endpoint URL (for local development)"
+    )
+
+    # OpenSearch
+    opensearch_endpoint: Optional[str] = Field(
+        default=None, description="OpenSearch endpoint URL"
+    )
+    opensearch_use_ssl: bool = Field(default=True, description="Use SSL for OpenSearch")
+    opensearch_verify_certs: bool = Field(
+        default=True, description="Verify SSL certificates"
+    )
+    opensearch_username: Optional[str] = Field(
+        default=None, description="OpenSearch username"
+    )
+    opensearch_password: Optional[str] = Field(
+        default=None, description="OpenSearch password"
+    )
+
+    # Redis
+    redis_host: str = Field(default="localhost", description="Redis host")
+    redis_port: int = Field(default=6379, description="Redis port")
+    redis_db: int = Field(default=0, description="Redis database number")
+    redis_password: Optional[str] = Field(default=None, description="Redis password")
+    redis_ssl: bool = Field(default=False, description="Use SSL for Redis")
+
+    # Secrets Manager
+    secrets_manager_region: Optional[str] = Field(
+        default=None, description="Secrets Manager region"
+    )
+    secrets_manager_openai_key_name: str = Field(
+        default="doctor-agent/openai-api-key",
+        description="OpenAI API key secret name",
+    )
+
+    # Message TTL
+    message_ttl_hours: int = Field(
+        default=48, description="Message TTL in hours"
+    )
+
+    # CORS
+    cors_origins: list[str] = Field(
+        default=["http://localhost:3000"], description="Allowed CORS origins"
+    )
+
+    # WebSocket
+    websocket_ping_interval: int = Field(
+        default=25, description="WebSocket ping interval in seconds"
+    )
+    websocket_ping_timeout: int = Field(
+        default=5, description="WebSocket ping timeout in seconds"
+    )
+
+    # Security
+    admin_token: Optional[str] = Field(
+        default=None, description="Admin authentication token"
+    )
+    rate_limit_per_minute: int = Field(
+        default=60, description="Rate limit per minute per IP"
+    )
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
+

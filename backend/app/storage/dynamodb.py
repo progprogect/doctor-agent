@@ -1,0 +1,280 @@
+"""DynamoDB client wrapper."""
+
+import time
+from datetime import datetime, timedelta
+from functools import lru_cache
+from typing import Any, Optional
+
+import boto3
+from botocore.exceptions import ClientError
+from pydantic import BaseModel
+
+from app.config import Settings, get_settings
+from app.models.conversation import Conversation, ConversationStatus
+from app.models.message import Message, MessageRole
+
+
+class DynamoDBClient:
+    """DynamoDB client wrapper."""
+
+    def __init__(self, settings: Settings):
+        """Initialize DynamoDB client."""
+        self.settings = settings
+        self.dynamodb = boto3.resource(
+            "dynamodb",
+            region_name=settings.aws_region,
+            endpoint_url=settings.dynamodb_endpoint_url,
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
+        )
+        self.tables = {
+            "conversations": self.dynamodb.Table(settings.dynamodb_table_conversations),
+            "messages": self.dynamodb.Table(settings.dynamodb_table_messages),
+            "agents": self.dynamodb.Table(settings.dynamodb_table_agents),
+            "audit_logs": self.dynamodb.Table(settings.dynamodb_table_audit_logs),
+        }
+        self.message_ttl_seconds = settings.message_ttl_hours * 3600
+
+    def _calculate_ttl(self, base_time: datetime) -> int:
+        """Calculate TTL timestamp (Unix epoch seconds)."""
+        expiry_time = base_time + timedelta(seconds=self.message_ttl_seconds)
+        return int(expiry_time.timestamp())
+
+    # Conversation operations
+    async def create_conversation(self, conversation: Conversation) -> Conversation:
+        """Create a new conversation."""
+        item = conversation.model_dump(exclude_none=True)
+        item["ttl"] = self._calculate_ttl(conversation.created_at)
+
+        self.tables["conversations"].put_item(Item=item)
+        return conversation
+
+    async def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
+        """Get conversation by ID."""
+        response = self.tables["conversations"].get_item(
+            Key={"conversation_id": conversation_id}
+        )
+        item = response.get("Item")
+        if not item:
+            return None
+        return Conversation(**item)
+
+    async def update_conversation(
+        self,
+        conversation_id: str,
+        status: Optional[ConversationStatus] = None,
+        handoff_reason: Optional[str] = None,
+        request_type: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Optional[Conversation]:
+        """Update conversation."""
+        update_expression_parts = []
+        expression_attribute_values = {}
+        expression_attribute_names = {}
+
+        if status:
+            update_expression_parts.append("#status = :status")
+            expression_attribute_names["#status"] = "status"
+            expression_attribute_values[":status"] = status.value
+
+        if handoff_reason is not None:
+            update_expression_parts.append("handoff_reason = :handoff_reason")
+            expression_attribute_values[":handoff_reason"] = handoff_reason
+
+        if request_type is not None:
+            update_expression_parts.append("request_type = :request_type")
+            expression_attribute_values[":request_type"] = request_type
+
+        for key, value in kwargs.items():
+            update_expression_parts.append(f"{key} = :{key}")
+            expression_attribute_values[f":{key}"] = value
+
+        if not update_expression_parts:
+            return await self.get_conversation(conversation_id)
+
+        update_expression_parts.append("updated_at = :updated_at")
+        expression_attribute_values[":updated_at"] = datetime.utcnow().isoformat()
+
+        try:
+            self.tables["conversations"].update_item(
+                Key={"conversation_id": conversation_id},
+                UpdateExpression=f"SET {', '.join(update_expression_parts)}",
+                ExpressionAttributeValues=expression_attribute_values,
+                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else None,
+                ReturnValues="ALL_NEW",
+            )
+            return await self.get_conversation(conversation_id)
+        except ClientError as e:
+            raise RuntimeError(f"Failed to update conversation: {e}") from e
+
+    async def list_conversations(
+        self,
+        agent_id: Optional[str] = None,
+        status: Optional[ConversationStatus] = None,
+        limit: int = 100,
+    ) -> list[Conversation]:
+        """List conversations with optional filters."""
+        # For MVP, using scan (not efficient for large datasets)
+        # In production, use GSI for agent_id and status
+        filter_expression = None
+        expression_attribute_values = {}
+
+        if agent_id:
+            filter_expression = "agent_id = :agent_id"
+            expression_attribute_values[":agent_id"] = agent_id
+
+        if status:
+            status_filter = "status = :status"
+            if filter_expression:
+                filter_expression += " AND " + status_filter
+            else:
+                filter_expression = status_filter
+            expression_attribute_values[":status"] = status.value
+
+        scan_kwargs = {"Limit": limit}
+        if filter_expression:
+            scan_kwargs["FilterExpression"] = filter_expression
+            scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
+
+        response = self.tables["conversations"].scan(**scan_kwargs)
+        items = response.get("Items", [])
+        return [Conversation(**item) for item in items]
+
+    # Message operations
+    async def create_message(self, message: Message) -> Message:
+        """Create a new message."""
+        item = message.model_dump(exclude_none=True)
+        item["ttl"] = self._calculate_ttl(message.timestamp)
+
+        self.tables["messages"].put_item(Item=item)
+        return message
+
+    async def get_message(self, message_id: str) -> Optional[Message]:
+        """Get message by ID."""
+        response = self.tables["messages"].get_item(Key={"message_id": message_id})
+        item = response.get("Item")
+        if not item:
+            return None
+        return Message(**item)
+
+    async def list_messages(
+        self,
+        conversation_id: str,
+        limit: int = 100,
+        reverse: bool = True,
+    ) -> list[Message]:
+        """List messages for a conversation."""
+        # For MVP, using query on conversation_id (requires GSI)
+        # Fallback to scan if GSI not available
+        try:
+            response = self.tables["messages"].query(
+                IndexName="conversation_id-index",  # Requires GSI
+                KeyConditionExpression="conversation_id = :conv_id",
+                ExpressionAttributeValues={":conv_id": conversation_id},
+                Limit=limit,
+                ScanIndexForward=not reverse,
+            )
+            items = response.get("Items", [])
+        except ClientError:
+            # Fallback to scan if GSI doesn't exist
+            response = self.tables["messages"].scan(
+                FilterExpression="conversation_id = :conv_id",
+                ExpressionAttributeValues={":conv_id": conversation_id},
+                Limit=limit,
+            )
+            items = response.get("Items", [])
+            # Sort by timestamp
+            items.sort(key=lambda x: x.get("timestamp", ""), reverse=reverse)
+
+        return [Message(**item) for item in items]
+
+    # Agent operations
+    async def create_agent(self, agent_id: str, config: dict[str, Any]) -> dict[str, Any]:
+        """Create or update agent configuration."""
+        item = {
+            "agent_id": agent_id,
+            "config": config,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+            "is_active": True,
+        }
+        self.tables["agents"].put_item(Item=item)
+        return item
+
+    async def get_agent(self, agent_id: str) -> Optional[dict[str, Any]]:
+        """Get agent configuration."""
+        response = self.tables["agents"].get_item(Key={"agent_id": agent_id})
+        item = response.get("Item")
+        return item
+
+    async def list_agents(self, active_only: bool = True) -> list[dict[str, Any]]:
+        """List all agents."""
+        if active_only:
+            response = self.tables["agents"].scan(
+                FilterExpression="is_active = :active",
+                ExpressionAttributeValues={":active": True},
+            )
+        else:
+            response = self.tables["agents"].scan()
+        return response.get("Items", [])
+
+    # Audit log operations
+    async def create_audit_log(
+        self,
+        admin_id: str,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Create audit log entry."""
+        log_id = f"{resource_type}_{resource_id}_{int(time.time())}"
+        item = {
+            "log_id": log_id,
+            "admin_id": admin_id,
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "metadata": metadata or {},
+        }
+        self.tables["audit_logs"].put_item(Item=item)
+        return item
+
+    async def list_audit_logs(
+        self,
+        admin_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """List audit logs."""
+        filter_expression = None
+        expression_attribute_values = {}
+
+        if admin_id:
+            filter_expression = "admin_id = :admin_id"
+            expression_attribute_values[":admin_id"] = admin_id
+
+        if resource_type:
+            resource_filter = "resource_type = :resource_type"
+            if filter_expression:
+                filter_expression += " AND " + resource_filter
+            else:
+                filter_expression = resource_filter
+            expression_attribute_values[":resource_type"] = resource_type
+
+        scan_kwargs = {"Limit": limit}
+        if filter_expression:
+            scan_kwargs["FilterExpression"] = filter_expression
+            scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
+
+        response = self.tables["audit_logs"].scan(**scan_kwargs)
+        return response.get("Items", [])
+
+
+@lru_cache()
+def get_dynamodb_client() -> DynamoDBClient:
+    """Get cached DynamoDB client instance."""
+    settings = get_settings()
+    return DynamoDBClient(settings)
+

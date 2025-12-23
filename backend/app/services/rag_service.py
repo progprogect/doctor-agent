@@ -1,0 +1,198 @@
+"""RAG service for document retrieval."""
+
+import logging
+from functools import lru_cache
+from typing import Optional
+
+from app.api.exceptions import RAGServiceError
+from app.chains.rag_chain import RAGChain
+from app.services.llm_factory import LLMFactory, get_llm_factory
+from app.storage.opensearch import OpenSearchClient, get_opensearch_client
+
+logger = logging.getLogger(__name__)
+
+
+class RAGService:
+    """Service for RAG operations."""
+
+    def __init__(
+        self,
+        llm_factory: LLMFactory,
+        opensearch_client: OpenSearchClient,
+    ):
+        """Initialize RAG service."""
+        self.llm_factory = llm_factory
+        self.opensearch_client = opensearch_client
+        self.rag_chain = RAGChain(llm_factory, opensearch_client)
+
+    async def index_documents(
+        self,
+        agent_id: str,
+        documents: list[dict],
+        index_name: Optional[str] = None,
+    ) -> tuple[int, int]:
+        """Index documents for an agent."""
+        try:
+            if index_name is None:
+                index_name = f"agent_{agent_id}_documents"
+
+            # Ensure index exists
+            await self.opensearch_client.create_index(
+                index_name=index_name,
+                vector_dimension=1536,  # Default for text-embedding-3-small
+            )
+
+            # Generate embeddings and prepare documents
+            embeddings = await self.rag_chain._get_embeddings(agent_id)
+            indexed_docs = []
+
+            for doc in documents:
+                try:
+                    document_id = doc.get("id", doc.get("document_id"))
+                    title = doc.get("title", "")
+                    content = doc.get("content", "")
+
+                    if not content:
+                        logger.warning(
+                            f"Skipping document {document_id} - empty content",
+                            extra={"agent_id": agent_id, "document_id": document_id},
+                        )
+                        continue
+
+                    # Generate embedding
+                    embedding = await embeddings.aembed_query(content)
+
+                    indexed_docs.append({
+                        "agent_id": agent_id,
+                        "document_id": document_id,
+                        "title": title,
+                        "content": content,
+                        "embedding": embedding,
+                    })
+                except Exception as e:
+                    logger.error(
+                        f"Error processing document {doc.get('id', 'unknown')}: {str(e)}",
+                        exc_info=True,
+                        extra={"agent_id": agent_id, "document_id": doc.get("id")},
+                    )
+                    # Continue with other documents
+                    continue
+
+            if not indexed_docs:
+                logger.warning(
+                    f"No documents to index for agent {agent_id}",
+                    extra={"agent_id": agent_id},
+                )
+                return 0, len(documents)
+
+            # Bulk index
+            success_count, failed_count = await self.opensearch_client.bulk_index_documents(
+                index_name=index_name,
+                documents=indexed_docs,
+            )
+
+            logger.info(
+                f"Indexed {success_count} documents for agent {agent_id}, "
+                f"{failed_count} failed",
+                extra={"agent_id": agent_id, "success_count": success_count, "failed_count": failed_count},
+            )
+
+            return success_count, failed_count
+        except Exception as e:
+            logger.error(
+                f"RAG indexing error for agent {agent_id}: {str(e)}",
+                exc_info=True,
+                extra={"agent_id": agent_id, "documents_count": len(documents)},
+            )
+            raise RAGServiceError(
+                f"Failed to index documents: {str(e)}",
+                agent_id=agent_id,
+            )
+
+    async def retrieve_context(
+        self,
+        query: str,
+        agent_id: str,
+        index_name: Optional[str] = None,
+        top_k: int = 6,
+        score_threshold: float = 0.2,
+    ) -> list[dict]:
+        """Retrieve relevant context for a query."""
+        try:
+            if index_name is None:
+                index_name = f"agent_{agent_id}_documents"
+
+            results = await self.rag_chain.retrieve(
+                query=query,
+                agent_id=agent_id,
+                index_name=index_name,
+                top_k=top_k,
+                score_threshold=score_threshold,
+            )
+
+            logger.debug(
+                f"Retrieved {len(results)} documents for query",
+                extra={"agent_id": agent_id, "query_length": len(query), "results_count": len(results)},
+            )
+
+            return results
+        except Exception as e:
+            logger.error(
+                f"RAG retrieval error for agent {agent_id}: {str(e)}",
+                exc_info=True,
+                extra={"agent_id": agent_id, "query_length": len(query)},
+            )
+            # Return empty list on error to allow conversation to continue
+            return []
+
+    async def get_formatted_context(
+        self,
+        query: str,
+        agent_id: str,
+        index_name: Optional[str] = None,
+        top_k: int = 6,
+    ) -> str:
+        """Get formatted context string for LLM prompt."""
+        try:
+            if index_name is None:
+                index_name = f"agent_{agent_id}_documents"
+
+            context = await self.rag_chain.get_relevant_context(
+                query=query,
+                agent_id=agent_id,
+                index_name=index_name,
+                top_k=top_k,
+            )
+
+            return context
+        except Exception as e:
+            logger.error(
+                f"RAG context formatting error for agent {agent_id}: {str(e)}",
+                exc_info=True,
+                extra={"agent_id": agent_id, "query_length": len(query)},
+            )
+            # Return empty string on error to allow conversation to continue
+            return ""
+
+    async def delete_agent_documents(
+        self,
+        agent_id: str,
+        index_name: Optional[str] = None,
+    ) -> int:
+        """Delete all documents for an agent."""
+        if index_name is None:
+            index_name = f"agent_{agent_id}_documents"
+
+        return await self.opensearch_client.delete_documents_by_agent(
+            index_name=index_name,
+            agent_id=agent_id,
+        )
+
+
+@lru_cache()
+def get_rag_service() -> RAGService:
+    """Get cached RAG service instance."""
+    llm_factory = get_llm_factory()
+    opensearch_client = get_opensearch_client()
+    return RAGService(llm_factory, opensearch_client)
+
