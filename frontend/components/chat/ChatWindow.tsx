@@ -35,11 +35,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
   return (
     <div className="flex flex-col h-full">
       {/* Connection status */}
-      <div className="border-b border-gray-200 px-4 py-2 bg-gray-50">
+      <div className="border-b border-[#D4AF37]/20 px-4 py-2 bg-white">
         <div className="flex items-center gap-2">
           <div
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? "bg-green-500" : "bg-red-500"
+            className={`w-2 h-2 rounded-full transition-colors duration-200 ${
+              isConnected ? "bg-[#D4AF37]" : "bg-red-500"
             }`}
           />
           <span className="text-sm text-gray-600">
@@ -50,7 +50,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
 
       {/* Error message */}
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 m-4">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 m-4 rounded-sm">
           <p className="text-sm text-red-700">{error}</p>
         </div>
       )}

@@ -35,7 +35,7 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="flex items-center justify-center min-h-screen p-4 bg-white">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Something went wrong
@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </p>
             <button
               onClick={() => this.setState({ hasError: false })}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="px-4 py-2 bg-[#D4AF37] text-white rounded-sm hover:bg-[#B8860B] transition-all duration-200 shadow-sm hover:shadow-md"
             >
               Try again
             </button>

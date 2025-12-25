@@ -31,7 +31,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <div className="border-t border-gray-200 p-4">
+    <div className="border-t border-[#D4AF37]/20 p-4 bg-white">
       <div className="flex gap-2">
         <textarea
           value={content}
@@ -40,7 +40,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           disabled={disabled}
           placeholder={placeholder}
           rows={1}
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-sm bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] resize-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
         <Button
           onClick={handleSend}

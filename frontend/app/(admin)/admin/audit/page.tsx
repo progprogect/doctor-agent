@@ -54,7 +54,7 @@ export default function AuditPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Audit Logs</h1>
 
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-sm">
           <p className="text-sm text-red-700">{error}</p>
         </div>
       )}
@@ -64,27 +64,27 @@ export default function AuditPage() {
           <p className="text-gray-600">No audit logs found</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-[#F5D76E]/10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Timestamp
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Admin
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Action
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Resource
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {logs.map((log) => (
-                <tr key={log.log_id}>
+                <tr key={log.log_id} className="hover:bg-[#F5D76E]/5 transition-colors duration-150">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(log.timestamp).toLocaleString()}
                   </td>

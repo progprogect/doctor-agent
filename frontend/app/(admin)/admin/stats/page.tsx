@@ -59,18 +59,18 @@ export default function StatsPage() {
   }
 
   const statCards = [
-    { label: "Total Conversations", value: stats.total_conversations, color: "blue" },
-    { label: "AI Active", value: stats.ai_active, color: "green" },
-    { label: "Needs Human", value: stats.needs_human, color: "yellow" },
-    { label: "Human Active", value: stats.human_active, color: "purple" },
+    { label: "Total Conversations", value: stats.total_conversations, color: "gold" },
+    { label: "AI Active", value: stats.ai_active, color: "gold-light" },
+    { label: "Needs Human", value: stats.needs_human, color: "amber" },
+    { label: "Human Active", value: stats.human_active, color: "blue" },
     { label: "Closed", value: stats.closed, color: "gray" },
   ];
 
   const colorClasses = {
-    blue: "bg-blue-50 text-blue-700 border-blue-200",
-    green: "bg-green-50 text-green-700 border-green-200",
-    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    purple: "bg-purple-50 text-purple-700 border-purple-200",
+    gold: "bg-[#F5D76E]/10 text-[#B8860B] border-[#D4AF37]/30",
+    "gold-light": "bg-[#F5D76E]/20 text-[#B8860B] border-[#D4AF37]/40",
+    amber: "bg-[#F59E0B]/10 text-[#D97706] border-[#F59E0B]/30",
+    blue: "bg-[#3B82F6]/10 text-[#2563EB] border-[#3B82F6]/30",
     gray: "bg-gray-50 text-gray-700 border-gray-200",
   };
 
@@ -82,7 +82,7 @@ export default function StatsPage() {
         {statCards.map((card) => (
           <div
             key={card.label}
-            className={`p-6 rounded-lg border-2 ${colorClasses[card.color as keyof typeof colorClasses]}`}
+            className={`p-6 rounded-sm border border-[#D4AF37]/20 bg-white shadow-sm hover:shadow-md transition-all duration-200 ${colorClasses[card.color as keyof typeof colorClasses]}`}
           >
             <p className="text-sm font-medium mb-2">{card.label}</p>
             <p className="text-3xl font-bold">{card.value}</p>

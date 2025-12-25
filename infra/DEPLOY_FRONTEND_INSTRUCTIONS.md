@@ -11,8 +11,8 @@
 2. **AWS credentials настроены**
    ```bash
    # Если не настроены, установите переменные окружения:
-   # export AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY_ID"
-   # export AWS_SECRET_ACCESS_KEY="YOUR_SECRET_ACCESS_KEY"
+   export AWS_ACCESS_KEY_ID="your-access-key-id"
+   export AWS_SECRET_ACCESS_KEY="your-secret-access-key"
    export AWS_DEFAULT_REGION="me-central-1"
    ```
 

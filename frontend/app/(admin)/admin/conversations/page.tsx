@@ -39,11 +39,11 @@ export default function ConversationsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "AI_ACTIVE":
-        return "bg-green-100 text-green-800";
+        return "bg-[#F5D76E]/20 text-[#B8860B] border border-[#D4AF37]/30";
       case "NEEDS_HUMAN":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-[#F59E0B]/20 text-[#D97706] border border-[#F59E0B]/30";
       case "HUMAN_ACTIVE":
-        return "bg-blue-100 text-blue-800";
+        return "bg-[#3B82F6]/20 text-[#2563EB] border border-[#3B82F6]/30";
       case "CLOSED":
         return "bg-gray-100 text-gray-800";
       default:
@@ -64,7 +64,7 @@ export default function ConversationsPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Conversations</h1>
 
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-sm">
           <p className="text-sm text-red-700">{error}</p>
         </div>
       )}
@@ -74,30 +74,30 @@ export default function ConversationsPage() {
           <p className="text-gray-600">No conversations found</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-[#F5D76E]/10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Conversation ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Agent ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {conversations.map((conv) => (
-                <tr key={conv.conversation_id}>
+                <tr key={conv.conversation_id} className="hover:bg-[#F5D76E]/5 transition-colors duration-150">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {conv.conversation_id.substring(0, 8)}...
                   </td>
@@ -106,7 +106,7 @@ export default function ConversationsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-sm ${getStatusColor(
                         conv.status
                       )}`}
                     >
@@ -119,7 +119,7 @@ export default function ConversationsPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <Link
                       href={`/admin/conversations/${conv.conversation_id}`}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="text-[#D4AF37] hover:text-[#B8860B] transition-colors duration-200"
                     >
                       View
                     </Link>

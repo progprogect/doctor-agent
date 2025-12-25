@@ -24,12 +24,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}
     >
       <div
-        className={`max-w-[70%] rounded-lg px-4 py-2 ${
+        className={`max-w-[70%] rounded-sm px-4 py-2 transition-all duration-200 ${
           isUser
-            ? "bg-blue-600 text-white"
+            ? "bg-[#D4AF37] text-white shadow-sm"
             : isAdmin
-            ? "bg-purple-600 text-white"
-            : "bg-gray-200 text-gray-900"
+            ? "bg-[#B8860B] text-white shadow-sm"
+            : "bg-white text-gray-900 border border-[#D4AF37]/30"
         }`}
       >
         <p className="text-sm whitespace-pre-wrap break-words">
@@ -37,7 +37,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         </p>
         <p
           className={`text-xs mt-1 ${
-            isUser ? "text-blue-100" : "text-gray-500"
+            isUser ? "text-white/80" : "text-gray-500"
           }`}
         >
           {formatTime(message.timestamp)}

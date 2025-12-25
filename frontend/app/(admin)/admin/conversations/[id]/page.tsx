@@ -100,12 +100,12 @@ export default function ConversationDetailPage() {
       </div>
 
       {actionError && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-sm">
           <p className="text-sm text-red-700">{actionError}</p>
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
+      <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 p-6 mb-6">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <p className="text-sm text-gray-500">Status</p>
@@ -126,7 +126,7 @@ export default function ConversationDetailPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Messages</h2>
         <div className="space-y-4">
           {messages.length === 0 ? (

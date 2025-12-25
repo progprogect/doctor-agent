@@ -40,7 +40,7 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-white">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -48,13 +48,13 @@ export default function Home() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+      <div className="flex items-center justify-center min-h-screen bg-white p-4">
         <div className="text-center max-w-md">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-4 py-2 bg-[#D4AF37] text-white rounded-sm hover:bg-[#B8860B] transition-all duration-200 shadow-sm hover:shadow-md"
           >
             Retry
           </button>
@@ -64,11 +64,11 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-white via-[#F5D76E]/5 to-[#D4AF37]/10">
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Doctor Agent
+            <span className="text-[#D4AF37]">Doctor</span> Agent
           </h1>
           <p className="text-xl text-gray-600">
             Выберите врача для начала консультации
@@ -80,7 +80,7 @@ export default function Home() {
             <p className="text-gray-600 mb-4">Нет доступных агентов</p>
             <a
               href="/admin/agents"
-              className="text-blue-600 hover:text-blue-700 underline"
+              className="text-[#D4AF37] hover:text-[#B8860B] underline transition-colors duration-200"
             >
               Перейти в админ панель
             </a>
@@ -90,7 +90,7 @@ export default function Home() {
             {agents.map((agent) => (
               <div
                 key={agent.agent_id}
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                className="bg-white rounded-sm shadow-md border border-[#D4AF37]/20 p-6 hover:shadow-lg hover:border-[#D4AF37]/40 transition-all duration-200 cursor-pointer"
                 onClick={() => handleStartChat(agent.agent_id)}
               >
                 <div className="flex items-start justify-between mb-4">
@@ -111,15 +111,15 @@ export default function Home() {
 
                 <div className="flex items-center justify-between">
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    className={`px-3 py-1 rounded-sm text-xs font-medium ${
                       agent.is_active
-                        ? "bg-green-100 text-green-800"
+                        ? "bg-[#F5D76E]/20 text-[#B8860B] border border-[#D4AF37]/30"
                         : "bg-gray-100 text-gray-800"
                     }`}
                   >
                     {agent.is_active ? "Активен" : "Неактивен"}
                   </span>
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                  <button className="px-4 py-2 bg-[#D4AF37] text-white rounded-sm hover:bg-[#B8860B] text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md">
                     Начать чат →
                   </button>
                 </div>
@@ -131,7 +131,7 @@ export default function Home() {
         <div className="text-center mt-12">
           <a
             href="/admin/agents"
-            className="text-gray-600 hover:text-gray-900 underline text-sm"
+            className="text-gray-600 hover:text-[#D4AF37] underline text-sm transition-colors duration-200"
           >
             Админ панель
           </a>

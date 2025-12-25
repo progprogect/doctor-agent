@@ -91,13 +91,13 @@ export default function ChatPage() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
+      <div className="flex items-center justify-center min-h-screen p-4 bg-white">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
             onClick={() => router.push("/")}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-4 py-2 bg-[#D4AF37] text-white rounded-sm hover:bg-[#B8860B] transition-all duration-200 shadow-sm hover:shadow-md"
           >
             Go back
           </button>
@@ -115,10 +115,12 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col">
-      <div className="border-b border-gray-200 px-6 py-4 bg-white">
+    <div className="h-screen flex flex-col bg-white">
+      <div className="border-b border-[#D4AF37]/20 px-6 py-4 bg-white">
         <h1 className="text-xl font-semibold text-gray-900">
-          {agent?.config.profile.clinic_display_name || "Chat"}
+          <span className="text-[#D4AF37]">
+            {agent?.config.profile.clinic_display_name || "Chat"}
+          </span>
         </h1>
         <p className="text-sm text-gray-600">
           {agent?.config.profile.doctor_display_name || ""}
