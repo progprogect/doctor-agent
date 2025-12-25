@@ -1,5 +1,6 @@
 """Agents API endpoints."""
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,6 +11,9 @@ from app.api.exceptions import AgentNotFoundError, InvalidAgentConfigError
 from app.api.schemas import AgentIDValidator
 from app.dependencies import CommonDependencies
 from app.models.agent_config import AgentConfig
+from app.services.rag_service import get_rag_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -42,6 +46,14 @@ async def create_agent(
     _admin: str = require_admin(),
 ):
     """Create a new agent."""
+    # Check if agent already exists
+    existing_agent = await deps.dynamodb.get_agent(request.agent_id)
+    if existing_agent:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Agent with ID '{request.agent_id}' already exists",
+        )
+
     # Validate agent configuration
     try:
         agent_config = AgentConfig.from_dict(request.config)
@@ -51,6 +63,14 @@ async def create_agent(
                 "Agent ID in config must match agent_id in request",
                 validation_errors={"agent_id_mismatch": True},
             )
+
+        # Validate RAG configuration if enabled
+        if agent_config.rag.enabled:
+            if not agent_config.rag.sources or len(agent_config.rag.sources) == 0:
+                raise InvalidAgentConfigError(
+                    "RAG is enabled but no documents provided",
+                    validation_errors={"rag_no_documents": True},
+                )
     except Exception as e:
         if isinstance(e, InvalidAgentConfigError):
             raise
@@ -59,7 +79,59 @@ async def create_agent(
             validation_errors={"parse_error": str(e)},
         )
 
+    # Create agent in DynamoDB
     agent_data = await deps.dynamodb.create_agent(request.agent_id, request.config)
+
+    # Index RAG documents if enabled
+    if agent_config.rag.enabled and agent_config.rag.sources:
+        try:
+            rag_service = get_rag_service()
+            index_name = agent_config.rag.vector_store.get(
+                "index_name", f"agent_{request.agent_id}_documents"
+            )
+
+            # Prepare documents for indexing
+            documents = []
+            for source in agent_config.rag.sources:
+                if source.get("content"):
+                    documents.append({
+                        "id": source.get("id", f"doc_{len(documents)}"),
+                        "title": source.get("title", "Untitled"),
+                        "content": source.get("content", ""),
+                    })
+
+            if documents:
+                success_count, failed_count = await rag_service.index_documents(
+                    agent_id=request.agent_id,
+                    documents=documents,
+                    index_name=index_name,
+                )
+
+                logger.info(
+                    f"Indexed {success_count} RAG documents for agent {request.agent_id}, "
+                    f"{failed_count} failed",
+                    extra={
+                        "agent_id": request.agent_id,
+                        "success_count": success_count,
+                        "failed_count": failed_count,
+                    },
+                )
+
+                if failed_count > 0:
+                    logger.warning(
+                        f"Some RAG documents failed to index for agent {request.agent_id}",
+                        extra={"agent_id": request.agent_id, "failed_count": failed_count},
+                    )
+        except Exception as e:
+            logger.error(
+                f"Failed to index RAG documents for agent {request.agent_id}: {str(e)}",
+                exc_info=True,
+                extra={"agent_id": request.agent_id},
+            )
+            # Don't fail agent creation if RAG indexing fails
+            # Agent will be created but RAG won't work until documents are indexed manually
+            # In production, you might want to mark agent as "needs_indexing" or retry
+
     return AgentResponse(**agent_data)
 
 

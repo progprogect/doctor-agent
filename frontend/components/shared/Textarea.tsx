@@ -1,17 +1,16 @@
-/** Reusable input component. */
+/** Reusable textarea component. */
 
 import React from "react";
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface TextareaProps
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
-  helperText?: string;
 }
 
-export const Input: React.FC<InputProps> = ({
+export const Textarea: React.FC<TextareaProps> = ({
   label,
   error,
-  helperText,
   className = "",
   ...props
 }) => {
@@ -22,19 +21,14 @@ export const Input: React.FC<InputProps> = ({
           {label}
         </label>
       )}
-      <input
+      <textarea
         className={`w-full px-3 py-2 border rounded-sm bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] ${
           error ? "border-red-500 focus:ring-red-500" : "border-gray-300"
         } ${className}`}
         {...props}
       />
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-      {!error && helperText && (
-        <p className="mt-1 text-sm text-gray-500">{helperText}</p>
-      )}
     </div>
   );
 };
-
-
 

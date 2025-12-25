@@ -1,5 +1,6 @@
 /** API client for backend communication. */
 
+import { getAdminToken } from "./auth";
 import type {
   Agent,
   CreateConversationRequest,
@@ -28,13 +29,22 @@ class ApiError extends Error {
 
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  requireAuth: boolean = false
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const headers = {
+  const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...options.headers,
   };
+
+  // Add Authorization header for admin endpoints
+  if (requireAuth) {
+    const token = getAdminToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
 
   try {
     const response = await fetch(url, {
@@ -67,6 +77,15 @@ async function request<T>(
 
     if (!response.ok) {
       const error = data as ErrorResponse;
+      
+      // Handle authentication errors
+      if (response.status === 401 || response.status === 403) {
+        // Clear token on auth failure
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("doctor_agent_admin_token");
+        }
+      }
+      
       throw new ApiError(
         error.error.code || "UNKNOWN_ERROR",
         error.error.message || "An error occurred",
@@ -98,23 +117,35 @@ export const api = {
   },
 
   async createAgent(agentId: string, config: any): Promise<Agent> {
-    return request<Agent>("/api/v1/agents/", {
-      method: "POST",
-      body: JSON.stringify({ agent_id: agentId, config }),
-    });
+    return request<Agent>(
+      "/api/v1/agents/",
+      {
+        method: "POST",
+        body: JSON.stringify({ agent_id: agentId, config }),
+      },
+      true // require auth
+    );
   },
 
   async updateAgent(agentId: string, config: any): Promise<Agent> {
-    return request<Agent>(`/api/v1/agents/${agentId}`, {
-      method: "PUT",
-      body: JSON.stringify(config),
-    });
+    return request<Agent>(
+      `/api/v1/agents/${agentId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(config),
+      },
+      true // require auth
+    );
   },
 
   async deleteAgent(agentId: string): Promise<void> {
-    await request<void>(`/api/v1/agents/${agentId}`, {
-      method: "DELETE",
-    });
+    await request<void>(
+      `/api/v1/agents/${agentId}`,
+      {
+        method: "DELETE",
+      },
+      true // require auth
+    );
   },
 
   // Conversation endpoints
@@ -167,7 +198,9 @@ export const api = {
     if (params?.limit) queryParams.append("limit", params.limit.toString());
 
     return request<Conversation[]>(
-      `/api/v1/admin/conversations?${queryParams.toString()}`
+      `/api/v1/admin/conversations?${queryParams.toString()}`,
+      {},
+      true // require auth
     );
   },
 
@@ -181,7 +214,8 @@ export const api = {
       {
         method: "POST",
         body: JSON.stringify({ admin_id: adminId, reason }),
-      }
+      },
+      true // require auth
     );
   },
 
@@ -189,10 +223,14 @@ export const api = {
     conversationId: string,
     adminId: string
   ): Promise<{ conversation_id: string; status: string; message: string }> {
-    return request(`/api/v1/admin/conversations/${conversationId}/return`, {
-      method: "POST",
-      body: JSON.stringify({ admin_id: adminId }),
-    }) as Promise<{ conversation_id: string; status: string; message: string }>;
+    return request(
+      `/api/v1/admin/conversations/${conversationId}/return`,
+      {
+        method: "POST",
+        body: JSON.stringify({ admin_id: adminId }),
+      },
+      true // require auth
+    ) as Promise<{ conversation_id: string; status: string; message: string }>;
   },
 
   async getAuditLogs(params?: {
@@ -207,7 +245,11 @@ export const api = {
     if (params?.limit)
       queryParams.append("limit", params.limit.toString());
 
-    return request<any[]>(`/api/v1/admin/audit?${queryParams.toString()}`);
+    return request<any[]>(
+      `/api/v1/admin/audit?${queryParams.toString()}`,
+      {},
+      true // require auth
+    );
   },
 
   async getStats(): Promise<{
@@ -217,7 +259,7 @@ export const api = {
     human_active: number;
     closed: number;
   }> {
-    return request("/api/v1/admin/stats");
+    return request("/api/v1/admin/stats", {}, true); // require auth
   },
 };
 

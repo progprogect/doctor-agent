@@ -3,12 +3,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
 import type { Agent } from "@/lib/types/agent";
 
 export default function AgentsPage() {
+  const router = useRouter();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +35,38 @@ export default function AgentsPage() {
     }
   };
 
+  const handleCreateAgent = () => {
+    router.push("/admin/agents/create");
+  };
+
+  const handleCloneAgent = async (agent: Agent) => {
+    try {
+      // Convert agent config to form data and save to localStorage
+      const { agentConfigToFormData } = await import("@/lib/utils/agentConfig");
+      const formData = agentConfigToFormData(agent.config);
+      
+      // Generate new agent_id
+      const newAgentId = `${agent.agent_id}_clone_${Date.now()}`;
+      formData.agent_id = newAgentId;
+
+      // Save as draft
+      const draft = {
+        currentStep: 1,
+        config: formData,
+        timestamp: Date.now(),
+        isClone: true,
+        sourceAgentId: agent.agent_id,
+      };
+      localStorage.setItem("agent_wizard_draft", JSON.stringify(draft));
+
+      // Navigate to create page
+      router.push("/admin/agents/create");
+    } catch (err) {
+      console.error("Failed to clone agent:", err);
+      setError("Failed to clone agent. Please try again.");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -45,7 +79,9 @@ export default function AgentsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
-        <Button variant="primary">Create Agent</Button>
+        <Button variant="primary" onClick={handleCreateAgent}>
+          Create Agent
+        </Button>
       </div>
 
       {error && (
@@ -55,8 +91,19 @@ export default function AgentsPage() {
       )}
 
       {agents.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-600">No agents found</p>
+        <div className="text-center py-16 bg-white rounded-sm shadow border border-[#D4AF37]/20">
+          <div className="max-w-md mx-auto">
+            <div className="text-6xl mb-4">👨‍⚕️</div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              No agents yet
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Create your first AI agent to start chatting with patients.
+            </p>
+            <Button variant="primary" onClick={handleCreateAgent}>
+              Create Your First Agent
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 overflow-hidden">
@@ -98,6 +145,13 @@ export default function AgentsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleCloneAgent(agent)}
+                      className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200"
+                      title="Clone this agent"
+                    >
+                      Clone
+                    </button>
                     <button className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200">
                       Edit
                     </button>
