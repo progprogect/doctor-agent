@@ -323,3 +323,5 @@ monitoring:
     booking_conversion_min: 0.10   # ≥10% обращений → запись
     share_without_human: 0.95      # ≥95% коммуникаций без участия человека
 
+
+

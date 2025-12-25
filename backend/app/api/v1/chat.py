@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.api.exceptions import AgentNotFoundError, ConversationNotFoundError
@@ -87,7 +87,7 @@ async def create_conversation(
 
 @router.get("/conversations/{conversation_id}", response_model=Conversation)
 async def get_conversation(
-    conversation_id: str = Field(..., description="Conversation ID"),
+    conversation_id: str,
     deps: CommonDependencies = Depends(),
 ):
     """Get conversation by ID."""
@@ -112,8 +112,8 @@ async def get_conversation(
     status_code=status.HTTP_201_CREATED,
 )
 async def send_message(
-    conversation_id: str = Field(..., description="Conversation ID"),
-    request: SendMessageRequest = ...,
+    conversation_id: str,
+    request: SendMessageRequest,
     deps: CommonDependencies = Depends(),
 ):
     """Send a message in a conversation."""
@@ -219,8 +219,8 @@ async def send_message(
 
 @router.get("/conversations/{conversation_id}/messages")
 async def get_messages(
-    conversation_id: str = Field(..., description="Conversation ID"),
-    limit: int = Field(default=100, ge=1, le=1000, description="Maximum number of messages"),
+    conversation_id: str,
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of messages"),
     deps: CommonDependencies = Depends(),
 ):
     """Get messages for a conversation."""

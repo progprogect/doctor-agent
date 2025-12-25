@@ -55,3 +55,5 @@ class BookingTool(BaseAgentTool):
         else:
             return "No booking intent detected"
 
+
+

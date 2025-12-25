@@ -62,3 +62,5 @@ The application uses:
 - Redis for caching
 - OpenAI API for LLM and embeddings
 
+
+

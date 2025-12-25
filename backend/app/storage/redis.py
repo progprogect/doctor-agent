@@ -109,3 +109,5 @@ def get_redis_client() -> RedisClient:
     settings = get_settings()
     return RedisClient(settings)
 
+
+

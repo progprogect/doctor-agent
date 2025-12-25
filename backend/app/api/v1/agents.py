@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.auth import require_admin
@@ -65,7 +65,7 @@ async def create_agent(
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
-    agent_id: str = Field(..., description="Agent ID"),
+    agent_id: str,
     deps: CommonDependencies = Depends(),
 ):
     """Get agent by ID."""
@@ -77,7 +77,7 @@ async def get_agent(
 
 @router.get("/", response_model=list[AgentResponse])
 async def list_agents(
-    active_only: bool = Field(default=True, description="Filter only active agents"),
+    active_only: bool = Query(default=True, description="Filter only active agents"),
     deps: CommonDependencies = Depends(),
 ):
     """List all agents."""
@@ -87,8 +87,8 @@ async def list_agents(
 
 @router.put("/{agent_id}", response_model=AgentResponse)
 async def update_agent(
-    agent_id: str = Field(..., description="Agent ID"),
-    config: dict[str, Any] = Field(..., description="Updated agent configuration"),
+    agent_id: str,
+    config: dict[str, Any],
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
 ):
@@ -123,7 +123,7 @@ async def update_agent(
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent(
-    agent_id: str = Field(..., description="Agent ID"),
+    agent_id: str,
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
 ):

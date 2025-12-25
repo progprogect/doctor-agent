@@ -44,3 +44,5 @@ def require_admin():
     """Dependency to require admin authentication."""
     return Depends(get_current_admin)
 
+
+

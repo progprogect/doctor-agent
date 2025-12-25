@@ -152,3 +152,5 @@ export interface MonitoringConfig {
   kpi_targets_mvp: Record<string, number>;
 }
 
+
+

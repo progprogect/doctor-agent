@@ -43,3 +43,5 @@ class Conversation(BaseModel):
         use_enum_values = True
         json_encoders = {datetime: lambda v: v.isoformat()}
 
+
+

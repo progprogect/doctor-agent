@@ -102,3 +102,5 @@ class MessageProcessingError(DoctorAgentException):
             details={"conversation_id": conversation_id} if conversation_id else {},
         )
 
+
+

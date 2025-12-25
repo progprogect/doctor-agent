@@ -1,65 +1,142 @@
-import Image from "next/image";
+/** Main page - Agent selection and chat entry point. */
+
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { api, ApiError } from "@/lib/api";
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import type { Agent } from "@/lib/types/agent";
 
 export default function Home() {
+  const router = useRouter();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadAgents = async () => {
+      try {
+        setIsLoading(true);
+        const loadedAgents = await api.listAgents(true);
+        setAgents(loadedAgents);
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError("Failed to load agents");
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAgents();
+  }, []);
+
+  const handleStartChat = (agentId: string) => {
+    router.push(`/chat/${agentId}`);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+        <div className="text-center max-w-md">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-16">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Doctor Agent
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-xl text-gray-600">
+            Выберите врача для начала консультации
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
+
+        {agents.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-600 mb-4">Нет доступных агентов</p>
+            <a
+              href="/admin/agents"
+              className="text-blue-600 hover:text-blue-700 underline"
+            >
+              Перейти в админ панель
+            </a>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+            {agents.map((agent) => (
+              <div
+                key={agent.agent_id}
+                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => handleStartChat(agent.agent_id)}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-1">
+                      {agent.config?.profile?.clinic_display_name ||
+                        agent.agent_id}
+                    </h3>
+                    {agent.config?.profile?.doctor_display_name && (
+                      <p className="text-sm text-gray-600">
+                        {agent.config.profile.doctor_display_name}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-3xl">👨‍⚕️</div>
+                </div>
+
+
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      agent.is_active
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {agent.is_active ? "Активен" : "Неактивен"}
+                  </span>
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                    Начать чат →
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="text-center mt-12">
           <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/admin/agents"
+            className="text-gray-600 hover:text-gray-900 underline text-sm"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
+            Админ панель
           </a>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

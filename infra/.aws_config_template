@@ -1,0 +1,14 @@
+# Шаблон AWS конфигурации
+# Скопируйте этот файл в ~/.aws/config и заполните значения
+
+[default]
+region = me-central-1
+output = json
+
+# Если используете профиль:
+# [profile doctor-agent]
+# region = me-central-1
+# output = json
+
+
+

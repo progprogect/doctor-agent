@@ -119,11 +119,11 @@ export const api = {
 
   // Conversation endpoints
   async createConversation(
-    request: CreateConversationRequest
+    data: CreateConversationRequest
   ): Promise<CreateConversationResponse> {
     return request<CreateConversationResponse>("/api/v1/chat/conversations", {
       method: "POST",
-      body: JSON.stringify(request),
+      body: JSON.stringify(data),
     });
   },
 
@@ -144,13 +144,13 @@ export const api = {
 
   async sendMessage(
     conversationId: string,
-    request: SendMessageRequest
+    data: SendMessageRequest
   ): Promise<SendMessageResponse> {
     return request<SendMessageResponse>(
       `/api/v1/chat/conversations/${conversationId}/messages`,
       {
         method: "POST",
-        body: JSON.stringify(request),
+        body: JSON.stringify(data),
       }
     );
   },

@@ -278,3 +278,5 @@ def get_dynamodb_client() -> DynamoDBClient:
     settings = get_settings()
     return DynamoDBClient(settings)
 
+
+

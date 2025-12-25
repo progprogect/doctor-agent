@@ -76,3 +76,5 @@ def get_secrets_manager() -> SecretsManager:
     settings = get_settings()
     return SecretsManager(settings)
 
+
+

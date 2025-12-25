@@ -3,7 +3,7 @@
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.api.auth import require_admin
@@ -34,9 +34,9 @@ class HandoffResponse(BaseModel):
 
 @router.get("/conversations")
 async def list_conversations(
-    agent_id: Optional[str] = Field(None, description="Filter by agent ID"),
-    status: Optional[str] = Field(None, description="Filter by conversation status"),
-    limit: int = Field(default=100, ge=1, le=1000, description="Maximum number of conversations"),
+    agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
+    status: Optional[str] = Query(None, description="Filter by conversation status"),
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of conversations"),
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
 ):
@@ -65,8 +65,8 @@ async def list_conversations(
     status_code=status.HTTP_200_OK,
 )
 async def handoff_conversation(
-    conversation_id: str = Field(..., description="Conversation ID"),
-    request: HandoffRequest = ...,
+    conversation_id: str,
+    request: HandoffRequest,
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
 ):
@@ -115,8 +115,8 @@ class ReturnToAIRequest(BaseModel):
 
 @router.post("/conversations/{conversation_id}/return")
 async def return_to_ai(
-    conversation_id: str = Field(..., description="Conversation ID"),
-    request: ReturnToAIRequest = ...,
+    conversation_id: str,
+    request: ReturnToAIRequest,
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
 ):
@@ -157,9 +157,9 @@ async def return_to_ai(
 
 @router.get("/audit")
 async def get_audit_logs(
-    admin_id: Optional[str] = Field(None, description="Filter by admin ID"),
-    resource_type: Optional[str] = Field(None, description="Filter by resource type"),
-    limit: int = Field(default=100, ge=1, le=1000, description="Maximum number of logs"),
+    admin_id: Optional[str] = Query(None, description="Filter by admin ID"),
+    resource_type: Optional[str] = Query(None, description="Filter by resource type"),
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of logs"),
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
 ):

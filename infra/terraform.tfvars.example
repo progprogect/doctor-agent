@@ -1,0 +1,49 @@
+# Terraform variables для Doctor Agent MVP
+# Скопируйте этот файл в terraform.tfvars и заполните реальными значениями
+
+vpc_id             = "vpc-03cb895f29b20a53e"
+aws_region         = "me-central-1"
+project_tag        = "doctor-agent"
+
+# Private subnets для ECS tasks, OpenSearch, Redis
+# Должны иметь маршрут через NAT Gateway для доступа в интернет
+private_subnet_ids = [
+  "subnet-090c04ef58faa7ee1",  # Doctor-agent-subnet-private1-me-central-1a
+  "subnet-0aa9317fe1b2228e1"  # Doctor-agent-subnet-private2-me-central-1b
+]
+
+# Public subnets для ALB (только если enable_alb = true)
+public_subnet_ids = [
+  "subnet-05596238170cc2248",  # Doctor-agent-subnet-public1-me-central-1a
+  "subnet-0d177e6c6453fbc92"  # Doctor-agent-subnet-public2-me-central-1b
+]
+
+# MVP настройки (минимальная стоимость)
+enable_alb = false              # Отключить ALB (~$16/месяц экономии)
+redis_num_cache_nodes = 0      # Отключить Redis (~$15/месяц экономии)
+
+# OpenSearch настройки
+opensearch_instance_type  = "t3.small.search"  # Минимальный размер для MVP
+opensearch_instance_count = 1
+opensearch_ebs_volume_size = 20
+opensearch_master_user_name = "admin"
+# Пароль задайте через Secrets Manager после создания домена:
+# aws secretsmanager put-secret-value \
+#   --region me-central-1 \
+#   --secret-id doctor-agent/opensearch \
+#   --secret-string "your-secure-password"
+
+# ECS настройки
+ecs_cpu          = 512          # 0.5 vCPU
+ecs_memory       = 1024         # 1 GB RAM
+ecs_desired_count = 1           # Один task для MVP
+
+# ECR
+ecr_repository_name = "doctor-agent-backend"
+
+# Redis (отключен для MVP)
+# redis_node_type = "cache.t3.micro"
+# redis_num_cache_nodes = 1
+
+
+

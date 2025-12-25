@@ -219,3 +219,5 @@ def get_opensearch_client() -> OpenSearchClient:
     settings = get_settings()
     return OpenSearchClient(settings)
 
+
+
