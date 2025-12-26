@@ -82,6 +82,13 @@ resource "aws_lb_target_group" "backend" {
     matcher             = "200"
   }
 
+  # Enable stickiness for WebSocket connections
+  stickiness {
+    enabled         = true
+    type            = "lb_cookie"
+    cookie_duration = 86400
+  }
+
   deregistration_delay = 30
 
   tags = local.common_tags
@@ -151,6 +158,24 @@ resource "aws_lb_listener_rule" "backend_api" {
   condition {
     path_pattern {
       values = ["/api/*", "/health", "/docs", "/openapi.json"]
+    }
+  }
+}
+
+# HTTP Listener Rule - WebSocket routes go to backend
+resource "aws_lb_listener_rule" "backend_websocket" {
+  count        = var.enable_alb ? 1 : 0
+  listener_arn = aws_lb_listener.frontend[0].arn
+  priority     = 90
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend[0].arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/ws/*"]
     }
   }
 }
