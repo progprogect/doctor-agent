@@ -32,7 +32,8 @@ class EscalationTool(BaseAgentTool):
         agent_id: Optional[str] = None,
     ):
         """Initialize escalation tool."""
-        super().__init__(agent_id=agent_id)
+        self.agent_id = agent_id
+        super().__init__()
         self.escalation_service = escalation_service
 
     def _run(self, message: str, context: Optional[dict] = None) -> str:
