@@ -9,6 +9,8 @@ interface WizardNavigationProps {
   onNext: () => void;
   onBack: () => void;
   onCancel: () => void;
+  onStartOver?: () => void;
+  hasDraft?: boolean;
   isNextDisabled?: boolean;
   isSubmitting?: boolean;
   nextLabel?: string;
@@ -20,6 +22,8 @@ export const WizardNavigation: React.FC<WizardNavigationProps> = ({
   onNext,
   onBack,
   onCancel,
+  onStartOver,
+  hasDraft = false,
   isNextDisabled = false,
   isSubmitting = false,
   nextLabel,
@@ -29,17 +33,26 @@ export const WizardNavigation: React.FC<WizardNavigationProps> = ({
 
   return (
     <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-      <div>
+      <div className="flex items-center gap-2">
         {!isFirstStep && (
           <Button variant="secondary" onClick={onBack} disabled={isSubmitting}>
             Back
+          </Button>
+        )}
+        {(hasDraft || !isFirstStep) && onStartOver && (
+          <Button
+            variant="ghost"
+            onClick={onStartOver}
+            disabled={isSubmitting}
+            className="text-gray-600 hover:text-gray-900"
+          >
+            Start Over
           </Button>
         )}
         <Button
           variant="ghost"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="ml-2"
         >
           Cancel
         </Button>

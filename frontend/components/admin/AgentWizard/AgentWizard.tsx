@@ -38,6 +38,7 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
     prevStep,
     reset,
     clearDraft,
+    hasDraft,
   } = useAgentWizard();
 
   const handleNext = () => {
@@ -47,20 +48,25 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
   };
 
   const handleCancel = () => {
-    // Ask user if they want to save draft (client-side only)
+    // Draft is already saved automatically, just navigate away
+    onCancel();
+  };
+
+  const handleStartOver = () => {
+    // Ask for confirmation before clearing draft
     if (typeof window !== "undefined") {
-      if (window.confirm("Do you want to save your progress as a draft?")) {
-        // Draft is already saved automatically
-      } else {
+      const confirmed = window.confirm(
+        "Are you sure you want to start over? This will clear all your current progress and cannot be undone."
+      );
+      if (confirmed) {
         clearDraft();
         reset();
       }
     } else {
-      // On server-side, just clear draft
+      // On server-side, just clear and reset
       clearDraft();
       reset();
     }
-    onCancel();
   };
 
   const handleSuccess = () => {
@@ -122,6 +128,8 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
               // On success, call handleSuccess to clear draft and redirect
               handleSuccess();
             }}
+            onStartOver={handleStartOver}
+            hasDraft={hasDraft()}
           />
         );
       default:
@@ -152,6 +160,8 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
             onNext={handleNext}
             onBack={prevStep}
             onCancel={handleCancel}
+            onStartOver={handleStartOver}
+            hasDraft={hasDraft()}
             isSubmitting={state.isSubmitting}
           />
         )}

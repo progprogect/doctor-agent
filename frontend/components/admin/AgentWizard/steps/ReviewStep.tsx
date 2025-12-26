@@ -15,12 +15,16 @@ interface ReviewStepProps {
   config: Partial<AgentConfigFormData>;
   isSubmitting?: boolean;
   onSubmit: () => Promise<void> | void;
+  onStartOver?: () => void;
+  hasDraft?: boolean;
 }
 
 export const ReviewStep: React.FC<ReviewStepProps> = ({
   config,
   isSubmitting: externalIsSubmitting,
   onSubmit,
+  onStartOver,
+  hasDraft = false,
 }) => {
   const [error, setError] = useState<string | null>(null);
   const [yamlPreview, setYamlPreview] = useState<string>("");
@@ -321,12 +325,26 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
         </div>
       )}
 
-      {/* Create Button */}
+      {/* Action Buttons */}
       {!submitting && (
-        <div className="flex justify-end">
-          <Button variant="primary" onClick={handleCreate} size="lg">
-            Create Agent
-          </Button>
+        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+          <div>
+            {(hasDraft || onStartOver) && (
+              <Button
+                variant="ghost"
+                onClick={onStartOver}
+                disabled={submitting}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                Start Over
+              </Button>
+            )}
+          </div>
+          <div>
+            <Button variant="primary" onClick={handleCreate} size="lg">
+              Create Agent
+            </Button>
+          </div>
         </div>
       )}
     </div>
