@@ -138,11 +138,17 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
             return
 
         # Send initial status
+        # Handle both enum and string status (from DynamoDB)
+        status_value = (
+            conversation.status.value
+            if hasattr(conversation.status, "value")
+            else str(conversation.status)
+        )
         await connection_manager.send_message(
             conversation_id,
             {
                 "type": "status",
-                "status": conversation.status.value,
+                "status": status_value,
                 "conversation_id": conversation_id,
                 "timestamp": None,
             },
@@ -228,7 +234,13 @@ async def _handle_message(
         return
 
     # Check if conversation is active
-    if conversation.status == ConversationStatus.CLOSED:
+    # Handle both enum and string status (from DynamoDB)
+    status_value = (
+        conversation.status.value
+        if hasattr(conversation.status, "value")
+        else str(conversation.status)
+    )
+    if status_value == ConversationStatus.CLOSED.value:
         await connection_manager.send_error(
             conversation_id, "Conversation is closed"
         )
