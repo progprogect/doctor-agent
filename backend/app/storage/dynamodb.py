@@ -2,6 +2,7 @@
 
 import time
 from datetime import datetime, timedelta
+from decimal import Decimal
 from functools import lru_cache
 from typing import Any, Optional
 
@@ -34,6 +35,17 @@ class DynamoDBClient:
             "audit_logs": self.dynamodb.Table(settings.dynamodb_table_audit_logs),
         }
         self.message_ttl_seconds = settings.message_ttl_hours * 3600
+
+    def _convert_floats_to_decimal(self, obj: Any) -> Any:
+        """Recursively convert float values to Decimal for DynamoDB compatibility."""
+        if isinstance(obj, float):
+            return Decimal(str(obj))
+        elif isinstance(obj, dict):
+            return {k: self._convert_floats_to_decimal(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_floats_to_decimal(item) for item in obj]
+        else:
+            return obj
 
     def _calculate_ttl(self, base_time: datetime) -> int:
         """Calculate TTL timestamp (Unix epoch seconds)."""
@@ -191,9 +203,12 @@ class DynamoDBClient:
     # Agent operations
     async def create_agent(self, agent_id: str, config: dict[str, Any]) -> dict[str, Any]:
         """Create or update agent configuration."""
+        # Convert float values to Decimal for DynamoDB compatibility
+        config_converted = self._convert_floats_to_decimal(config)
+        
         item = {
             "agent_id": agent_id,
-            "config": config,
+            "config": config_converted,
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
             "is_active": True,
