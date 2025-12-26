@@ -13,7 +13,7 @@ from app.api.exceptions import ConversationNotFoundError
 from app.dependencies import CommonDependencies
 from app.models.agent_config import AgentConfig
 from app.models.conversation import ConversationStatus
-from app.models.message import MessageRole
+from app.models.message import Message, MessageRole
 from app.services.agent_service import create_agent_service
 from app.services.conversation_service import ConversationService
 from app.storage.dynamodb import DynamoDBClient
