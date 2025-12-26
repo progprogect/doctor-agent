@@ -10,12 +10,14 @@ interface SelectOption {
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
+  helperText?: string;
   options: SelectOption[];
 }
 
 export const Select: React.FC<SelectProps> = ({
   label,
   error,
+  helperText,
   options,
   className = "",
   ...props
@@ -45,6 +47,9 @@ export const Select: React.FC<SelectProps> = ({
           </option>
         ))}
       </select>
+      {helperText && !error && (
+        <p className="mt-1 text-xs text-gray-500">{helperText}</p>
+      )}
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
     </div>
   );
