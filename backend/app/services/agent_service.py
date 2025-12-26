@@ -103,6 +103,7 @@ class AgentService:
                     query=user_message,
                     agent_id=self.agent_config.agent_id,
                     top_k=self.agent_config.rag.retrieval.get("top_k", 6),
+                    score_threshold=self.agent_config.rag.retrieval.get("score_threshold", 0.2),
                 )
                 if rag_context:
                     logger.debug(

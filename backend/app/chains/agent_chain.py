@@ -92,11 +92,27 @@ class AgentChain:
         hard_rules = prompts.get("hard_rules", "")
         goal = prompts.get("goal", "")
 
+        # Build style description from config
+        style = self.agent_config.style
+        style_description = f"""
+Communication Style Guidelines:
+- Tone: {style.tone.replace('_', ' ').title()}
+- Formality Level: {style.formality.replace('_', ' ').title()}
+- Empathy Level: {style.empathy_level}/10 (higher = more empathetic and understanding)
+- Depth Level: {style.depth_level}/10 (higher = more detailed responses)
+- Message Length: {style.message_length.replace('_', ' ').title()}
+- Persuasion Approach: {style.persuasion.title()} (soft = gentle suggestions, strong = more direct)
+
+Apply these style guidelines consistently in all your responses. Adjust your communication to match these parameters while maintaining professionalism and medical safety.
+"""
+
         return f"""{persona}
 
 {hard_rules}
 
 {goal}
+
+{style_description}
 
 Remember:
 - Be friendly and professional

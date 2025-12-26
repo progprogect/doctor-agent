@@ -151,6 +151,7 @@ class RAGService:
         agent_id: str,
         index_name: Optional[str] = None,
         top_k: int = 6,
+        score_threshold: float = 0.2,
     ) -> str:
         """Get formatted context string for LLM prompt."""
         try:
@@ -162,6 +163,7 @@ class RAGService:
                 agent_id=agent_id,
                 index_name=index_name,
                 top_k=top_k,
+                score_threshold=score_threshold,
             )
 
             return context
