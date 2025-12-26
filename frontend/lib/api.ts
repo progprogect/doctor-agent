@@ -73,10 +73,26 @@ async function request<T>(
       return undefined as T;
     }
 
-    const data = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      // If response is not JSON, create error from status
+      if (!response.ok) {
+        throw new ApiError(
+          response.status.toString(),
+          `HTTP ${response.status}: ${response.statusText}`,
+          undefined,
+          undefined
+        );
+      }
+      return undefined as T;
+    }
 
     if (!response.ok) {
-      const error = data as ErrorResponse;
+      // FastAPI returns errors in format: { "detail": "message" }
+      // Our custom errors use: { "error": { "code": "...", "message": "..." } }
+      const error = data as ErrorResponse & { detail?: string };
       
       // Handle authentication errors
       if (response.status === 401 || response.status === 403) {
@@ -86,11 +102,15 @@ async function request<T>(
         }
       }
       
+      // Use status code as error code if error.error.code is not available
+      const errorCode = error.error?.code || response.status.toString();
+      const errorMessage = error.error?.message || error.detail || "An error occurred";
+      
       throw new ApiError(
-        error.error.code || "UNKNOWN_ERROR",
-        error.error.message || "An error occurred",
-        error.error.details,
-        error.error.request_id
+        errorCode,
+        errorMessage,
+        error.error?.details,
+        error.error?.request_id
       );
     }
 

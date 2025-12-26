@@ -41,16 +41,52 @@ export const RAGStep: React.FC<RAGStepProps> = ({
     title: string;
     content: string;
   }> => {
+    const title = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+
+    // Handle PDF files
+    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      try {
+        // Dynamic import to avoid SSR issues
+        const pdfjsLib = await import("pdfjs-dist");
+        const pdfjs = pdfjsLib.default || pdfjsLib;
+        
+        // Set worker source for PDF.js (using CDN)
+        if (typeof window !== "undefined" && pdfjs.GlobalWorkerOptions) {
+          pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version || "3.11.174"}/pdf.worker.min.js`;
+        }
+        
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const pageText = textContent.items
+            .map((item: any) => (item.str || ""))
+            .join(" ");
+          fullText += pageText + "\n\n";
+        }
+        
+        return { title, content: fullText.trim() };
+      } catch (error) {
+        console.error("Error processing PDF:", error);
+        throw new Error(`Failed to process PDF: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    }
+
+    // Handle text files
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const content = e.target?.result as string;
-        const title = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
         resolve({ title, content });
       };
       reader.onerror = reject;
       
-      if (file.type === "text/plain" || file.type === "text/markdown") {
+      if (file.type === "text/plain" || file.type === "text/markdown" || file.type === "application/json") {
         reader.readAsText(file);
       } else {
         // Try to read as text anyway
@@ -68,13 +104,23 @@ export const RAGStep: React.FC<RAGStepProps> = ({
       setIsProcessingFile(true);
       try {
         const newDocs = await Promise.all(
-          acceptedFiles.map(async (file) => {
-            const { title, content } = await processFile(file);
-            return {
-              id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-              title,
-              content,
-            };
+          acceptedFiles.map(async (file, index) => {
+            try {
+              const { title, content } = await processFile(file);
+              return {
+                id: `doc_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 11)}`,
+                title,
+                content,
+              };
+            } catch (fileError) {
+              console.error(`Error processing file ${file.name}:`, fileError);
+              // Return a document with error message
+              return {
+                id: `doc_${Date.now()}_${index}_error`,
+                title: `${file.name} (Error)`,
+                content: `Error processing file: ${fileError instanceof Error ? fileError.message : "Unknown error"}`,
+              };
+            }
           })
         );
 
@@ -96,6 +142,7 @@ export const RAGStep: React.FC<RAGStepProps> = ({
       "text/plain": [".txt"],
       "text/markdown": [".md"],
       "application/json": [".json"],
+      "application/pdf": [".pdf"],
     },
     multiple: true,
   });
@@ -191,7 +238,7 @@ export const RAGStep: React.FC<RAGStepProps> = ({
                     Drag & drop files here, or click to select
                   </p>
                   <p className="text-xs text-gray-500">
-                    Supports: .txt, .md, .json files
+                    Supports: .txt, .md, .json, .pdf files
                   </p>
                 </>
               )}

@@ -20,17 +20,37 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   errors,
   onUpdate,
 }) => {
-  // Auto-generate agent_id when clinic_display_name changes
+  // Auto-generate agent_id when clinic_display_name or doctor_display_name changes
   useEffect(() => {
     if (
       config.clinic_display_name &&
-      !config.agent_id &&
       config.clinic_display_name.trim() !== ""
     ) {
-      const generatedId = generateAgentId(config.clinic_display_name);
-      onUpdate({ agent_id: generatedId });
+      const generatedId = generateAgentId(
+        config.clinic_display_name,
+        config.doctor_display_name
+      );
+      // Always update agent_id to ensure it's in sync
+      if (!config.agent_id || generatedId !== config.agent_id) {
+        onUpdate({ agent_id: generatedId });
+      }
     }
-  }, [config.clinic_display_name, config.agent_id, onUpdate]);
+    // Don't generate default ID - wait for clinic name to be entered
+  }, [config.clinic_display_name, config.doctor_display_name, config.agent_id, onUpdate]);
+
+  const languageOptions = [
+    { value: "ru", label: "Русский" },
+    { value: "en", label: "English" },
+    { value: "ar", label: "العربية" },
+    { value: "fr", label: "Français" },
+    { value: "de", label: "Deutsch" },
+    { value: "es", label: "Español" },
+  ];
+
+  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedOptions = Array.from(e.target.selectedOptions, (option) => option.value);
+    onUpdate({ languages: selectedOptions });
+  };
 
   return (
     <div className="space-y-6">
@@ -80,15 +100,30 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
         </div>
 
         <div className="md:col-span-2">
-          <Input
-            label="Agent ID"
-            value={config.agent_id || ""}
-            onChange={(e) => onUpdate({ agent_id: e.target.value })}
-            error={getFieldError(errors, "agent_id")}
-            placeholder="doctor_001"
-            required
-            helperText="Auto-generated from clinic name. Must contain only lowercase letters, numbers, and underscores."
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Languages <span className="text-red-500">*</span>
+          </label>
+          <select
+            multiple
+            value={config.languages || ["ru", "en"]}
+            onChange={handleLanguageChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-sm bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] min-h-[100px]"
+            size={4}
+          >
+            {languageOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Select one or more languages. Hold Ctrl/Cmd to select multiple.
+          </p>
+          {getFieldError(errors, "languages") && (
+            <p className="mt-1 text-sm text-red-600">
+              {getFieldError(errors, "languages")}
+            </p>
+          )}
         </div>
       </div>
 
@@ -114,6 +149,16 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
             </div>
             {config.specialty && (
               <p className="text-sm text-gray-500">{config.specialty}</p>
+            )}
+            {config.languages && config.languages.length > 0 && (
+              <p className="text-xs text-gray-500 mt-2">
+                Languages: {config.languages.join(", ")}
+              </p>
+            )}
+            {config.agent_id && (
+              <p className="text-xs text-gray-400 mt-1">
+                Agent ID: {config.agent_id}
+              </p>
             )}
             <div className="mt-3">
               <span className="px-3 py-1 rounded-sm text-xs font-medium bg-[#F5D76E]/20 text-[#B8860B] border border-[#D4AF37]/30">

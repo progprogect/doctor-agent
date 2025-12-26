@@ -144,15 +144,17 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
 
         <div className="min-h-[400px]">{renderStep()}</div>
 
-        <WizardNavigation
-          currentStep={state.currentStep}
-          totalSteps={WIZARD_STEPS.length}
-          onNext={handleNext}
-          onBack={prevStep}
-          onCancel={handleCancel}
-          isSubmitting={state.isSubmitting}
-          nextLabel={state.currentStep === 6 ? "Create Agent" : undefined}
-        />
+        {/* Hide navigation on last step - ReviewStep has its own button */}
+        {state.currentStep < WIZARD_STEPS.length && (
+          <WizardNavigation
+            currentStep={state.currentStep}
+            totalSteps={WIZARD_STEPS.length}
+            onNext={handleNext}
+            onBack={prevStep}
+            onCancel={handleCancel}
+            isSubmitting={state.isSubmitting}
+          />
+        )}
       </div>
     </div>
   );

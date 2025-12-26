@@ -2,13 +2,14 @@
 
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/shared/Button";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { YAMLEditor } from "@/components/shared/YAMLEditor";
+import { Textarea } from "@/components/shared/Textarea";
 import { api, ApiError } from "@/lib/api";
 import type { AgentConfigFormData } from "@/lib/utils/agentConfig";
-import { formDataToAgentConfig } from "@/lib/utils/agentConfig";
+import { formDataToAgentConfig, generateAgentId } from "@/lib/utils/agentConfig";
 
 interface ReviewStepProps {
   config: Partial<AgentConfigFormData>;
@@ -24,18 +25,36 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [yamlPreview, setYamlPreview] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editMode, setEditMode] = useState<"form" | "yaml">("form");
+  const [editMode, setEditMode] = useState<"form" | "yaml" | "prompt">("form");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editedConfig, setEditedConfig] = useState<Record<string, any> | null>(
     null
   );
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [systemPersona, setSystemPersona] = useState<string>("");
+
+  // Initialize system persona from config or generate default
+  useEffect(() => {
+    if (config.system_persona) {
+      setSystemPersona(config.system_persona);
+    } else if (config.doctor_display_name && config.clinic_display_name) {
+      setSystemPersona(
+        `Ты общаешься от лица врача ${config.doctor_display_name} из ${config.clinic_display_name}.\nТвой стиль — дружелюбный и профессиональный. Ты помогаешь с информацией и записью.\nТы НЕ ведёшь медицинскую консультацию в чате.`
+      );
+    }
+  }, [config.system_persona, config.doctor_display_name, config.clinic_display_name]);
 
   // Generate YAML preview
   const agentConfig = useMemo(() => {
-    return editedConfig || formDataToAgentConfig(config as AgentConfigFormData);
-  }, [config, editedConfig]);
+    const baseConfig = editedConfig || formDataToAgentConfig(config as AgentConfigFormData);
+    // Update system persona if edited
+    if (systemPersona && baseConfig.prompts?.system) {
+      baseConfig.prompts.system.persona = systemPersona;
+    }
+    return baseConfig;
+  }, [config, editedConfig, systemPersona]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     try {
       // Convert to YAML-like format (JSON with proper indentation)
       const yaml = JSON.stringify(agentConfig, null, 2);
@@ -46,8 +65,17 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   }, [agentConfig]);
 
   const handleCreate = async () => {
-    if (!config.agent_id) {
-      setError("Agent ID is required");
+    // Ensure agent_id is generated if missing
+    let agentId = config.agent_id;
+    if (!agentId && config.clinic_display_name) {
+      agentId = generateAgentId(
+        config.clinic_display_name,
+        config.doctor_display_name
+      );
+    }
+    
+    if (!agentId) {
+      setError("Agent ID is required. Please fill in the clinic name.");
       return;
     }
 
@@ -63,25 +91,63 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     setError(null);
 
     try {
-      // Use edited config if in YAML mode, otherwise use form data
-      const agentConfig =
-        editMode === "yaml" && editedConfig
-          ? editedConfig
-          : formDataToAgentConfig(config as AgentConfigFormData);
+      // Try to create agent, handle ID conflicts by adding suffix
+      let finalAgentId = agentId;
+      let attempts = 0;
+      const maxAttempts = 10;
 
-      // Validate agent_id matches
-      if (agentConfig.agent_id !== config.agent_id) {
-        agentConfig.agent_id = config.agent_id;
-      }
+      while (attempts < maxAttempts) {
+        try {
+          // Use edited config if in YAML mode, otherwise use form data
+          const finalConfig =
+            editMode === "yaml" && editedConfig
+              ? editedConfig
+              : formDataToAgentConfig({ ...config, agent_id: finalAgentId } as AgentConfigFormData);
 
-      await api.createAgent(config.agent_id, agentConfig);
-      // Call onSubmit to trigger success handler in parent
-      await onSubmit();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError("Failed to create agent. Please try again.");
+          // Update system persona if edited
+          if (systemPersona && finalConfig.prompts?.system) {
+            finalConfig.prompts.system.persona = systemPersona;
+          }
+
+          // Ensure agent_id is set in config
+          finalConfig.agent_id = finalAgentId;
+
+          await api.createAgent(finalAgentId, finalConfig);
+          
+          // Success - call onSubmit to trigger success handler in parent
+          // Note: We don't need to update config here as agent is already created
+          await onSubmit();
+          return; // Success, exit function
+        } catch (err) {
+          // Check if it's a conflict error (409) and we can retry with suffix
+          const isConflictError =
+            err instanceof ApiError &&
+            (err.code === "409" || err.message.includes("already exists"));
+          
+          if (isConflictError && attempts < maxAttempts - 1) {
+            // Agent ID already exists, try with suffix
+            attempts++;
+            // Keep base ID shorter to leave room for suffix (max 3 chars for _10)
+            // Agent ID max length is 50, so we keep base at 45 to allow _10
+            const baseId = finalAgentId.length > 45 ? finalAgentId.substring(0, 45) : finalAgentId;
+            finalAgentId = `${baseId}_${attempts + 1}`;
+            continue; // Retry with new ID
+          } else {
+            // Other error or max attempts reached
+            if (err instanceof ApiError) {
+              if (isConflictError && attempts >= maxAttempts - 1) {
+                setError(
+                  `Agent ID "${finalAgentId}" already exists. Please edit the Agent ID manually in the JSON Editor to make it unique.`
+                );
+              } else {
+                setError(err.message);
+              }
+            } else {
+              setError("Failed to create agent. Please try again.");
+            }
+            return;
+          }
+        }
       }
     } finally {
       setIsSubmitting(false);
@@ -175,14 +241,23 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
                 setJsonError(null);
               }}
             >
-              Form View
+              Summary
+            </Button>
+            <Button
+              variant={editMode === "prompt" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => {
+                setEditMode("prompt");
+                setJsonError(null);
+              }}
+            >
+              Edit Prompt
             </Button>
             <Button
               variant={editMode === "yaml" ? "primary" : "secondary"}
               size="sm"
               onClick={() => {
                 setEditMode("yaml");
-                // Reset JSON error when switching to YAML mode
                 setJsonError(null);
               }}
             >
@@ -199,6 +274,22 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             language="json"
             error={jsonError || undefined}
           />
+        ) : editMode === "prompt" ? (
+          <div className="space-y-4">
+            <Textarea
+              label="System Persona Prompt"
+              value={systemPersona}
+              onChange={(e) => setSystemPersona(e.target.value)}
+              rows={10}
+              placeholder="Enter the system persona prompt that defines how the agent communicates..."
+              helperText="This prompt defines the agent's personality and communication style. Use {doctor_display_name} and {clinic_display_name} as placeholders."
+            />
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-sm">
+              <p className="text-sm text-blue-800">
+                <strong>Tip:</strong> The prompt will be used to set the agent's personality. Make sure to include placeholders for doctor and clinic names if needed.
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="border border-gray-300 rounded-sm p-4 bg-gray-50 max-h-[500px] overflow-auto">
             <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap">

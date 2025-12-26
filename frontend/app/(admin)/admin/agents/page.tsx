@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
+import { agentConfigToFormData } from "@/lib/utils/agentConfig";
 import type { Agent } from "@/lib/types/agent";
 
 export default function AgentsPage() {
@@ -42,7 +43,6 @@ export default function AgentsPage() {
   const handleCloneAgent = async (agent: Agent) => {
     try {
       // Convert agent config to form data and save to localStorage
-      const { agentConfigToFormData } = await import("@/lib/utils/agentConfig");
       const formData = agentConfigToFormData(agent.config);
       
       // Generate new agent_id
