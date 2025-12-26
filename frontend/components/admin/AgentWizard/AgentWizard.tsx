@@ -129,6 +129,7 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
               handleSuccess();
             }}
             onStartOver={handleStartOver}
+            onBack={prevStep}
             hasDraft={hasDraft()}
           />
         );

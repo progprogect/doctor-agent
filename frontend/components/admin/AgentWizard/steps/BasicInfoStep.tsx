@@ -4,6 +4,7 @@
 
 import React, { useEffect } from "react";
 import { Input } from "@/components/shared/Input";
+import { Checkbox } from "@/components/shared/Checkbox";
 import type { AgentConfigFormData } from "@/lib/utils/agentConfig";
 import type { ValidationError } from "@/lib/utils/validation";
 import { getFieldError } from "@/lib/utils/validation";
@@ -47,10 +48,21 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     { value: "es", label: "Español" },
   ];
 
-  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedOptions = Array.from(e.target.selectedOptions, (option) => option.value);
-    onUpdate({ languages: selectedOptions });
-  };
+      const handleLanguageToggle = (languageValue: string, checked: boolean) => {
+        const currentLanguages = config.languages || ["ru", "en"];
+        if (checked) {
+          // Add language if not already present
+          if (!currentLanguages.includes(languageValue)) {
+            onUpdate({ languages: [...currentLanguages, languageValue] });
+          }
+        } else {
+          // Remove language, but ensure at least one language remains
+          const filtered = currentLanguages.filter((lang) => lang !== languageValue);
+          if (filtered.length > 0) {
+            onUpdate({ languages: filtered });
+          }
+        }
+      };
 
   return (
     <div className="space-y-6">
@@ -100,24 +112,21 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Languages <span className="text-red-500">*</span>
           </label>
-          <select
-            multiple
-            value={config.languages || ["ru", "en"]}
-            onChange={handleLanguageChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-sm bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] min-h-[100px]"
-            size={4}
-          >
+          <div className="space-y-2 p-4 border border-gray-300 rounded-sm bg-white">
             {languageOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
+              <Checkbox
+                key={option.value}
+                label={option.label}
+                checked={(config.languages || ["ru", "en"]).includes(option.value)}
+                onChange={(checked) => handleLanguageToggle(option.value, checked)}
+              />
             ))}
-          </select>
+          </div>
           <p className="mt-1 text-xs text-gray-500">
-            Select one or more languages. Hold Ctrl/Cmd to select multiple.
+            Select one or more languages. At least one language must be selected.
           </p>
           {getFieldError(errors, "languages") && (
             <p className="mt-1 text-sm text-red-600">

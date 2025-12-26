@@ -16,6 +16,7 @@ interface ReviewStepProps {
   isSubmitting?: boolean;
   onSubmit: () => Promise<void> | void;
   onStartOver?: () => void;
+  onBack?: () => void;
   hasDraft?: boolean;
 }
 
@@ -24,6 +25,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   isSubmitting: externalIsSubmitting,
   onSubmit,
   onStartOver,
+  onBack,
   hasDraft = false,
 }) => {
   const [error, setError] = useState<string | null>(null);
@@ -328,7 +330,16 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
       {/* Action Buttons */}
       {!submitting && (
         <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-          <div>
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <Button
+                variant="secondary"
+                onClick={onBack}
+                disabled={submitting}
+              >
+                Back
+              </Button>
+            )}
             {(hasDraft || onStartOver) && (
               <Button
                 variant="ghost"
