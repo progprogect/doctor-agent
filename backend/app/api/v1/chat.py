@@ -78,10 +78,16 @@ async def create_conversation(
 
     await deps.dynamodb.create_conversation(conversation)
 
+    # Handle both enum and string status (from DynamoDB)
+    status_value = (
+        conversation.status.value
+        if hasattr(conversation.status, "value")
+        else str(conversation.status)
+    )
     return CreateConversationResponse(
         conversation_id=conversation_id,
         agent_id=request.agent_id,
-        status=conversation.status.value,
+        status=status_value,
     )
 
 
@@ -132,7 +138,13 @@ async def send_message(
         raise ConversationNotFoundError(conversation_id)
 
     # Check if conversation is active
-    if conversation.status == ConversationStatus.CLOSED:
+    # Handle both enum and string status (from DynamoDB)
+    status_value = (
+        conversation.status.value
+        if hasattr(conversation.status, "value")
+        else str(conversation.status)
+    )
+    if status_value == ConversationStatus.CLOSED.value:
         raise HTTPException(status_code=400, detail="Conversation is closed")
 
     # Create user message
@@ -180,9 +192,15 @@ async def send_message(
     if result.get("escalate"):
         # Status already updated in agent_service, just return user message
         # Return user message with escalation notice
+        # Handle both enum and string role (from DynamoDB)
+        role_value = (
+            user_message.role.value
+            if hasattr(user_message.role, "value")
+            else str(user_message.role)
+        )
         return SendMessageResponse(
             message_id=message_id,
-            role=user_message.role.value,
+            role=role_value,
             content=request.content,
             timestamp=user_message.timestamp.isoformat(),
         )
@@ -203,15 +221,27 @@ async def send_message(
     await deps.dynamodb.create_message(agent_message)
 
     # Update conversation status if needed
-    if conversation.status != ConversationStatus.AI_ACTIVE:
+    # Handle both enum and string status (from DynamoDB)
+    status_value = (
+        conversation.status.value
+        if hasattr(conversation.status, "value")
+        else str(conversation.status)
+    )
+    if status_value != ConversationStatus.AI_ACTIVE.value:
         await deps.dynamodb.update_conversation(
             conversation_id=conversation_id,
             status=ConversationStatus.AI_ACTIVE,
         )
 
+    # Handle both enum and string role (from DynamoDB)
+    role_value = (
+        agent_message.role.value
+        if hasattr(agent_message.role, "value")
+        else str(agent_message.role)
+    )
     return SendMessageResponse(
         message_id=agent_message_id,
-        role=agent_message.role.value,
+        role=role_value,
         content=agent_message.content,
         timestamp=agent_message.timestamp.isoformat(),
     )

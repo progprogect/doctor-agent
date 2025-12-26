@@ -79,7 +79,13 @@ class ConversationService:
         await self.dynamodb.create_message(agent_message)
 
         # Update conversation status if needed
-        if conversation.status != ConversationStatus.AI_ACTIVE:
+        # Handle both enum and string status (from DynamoDB)
+        status_value = (
+            conversation.status.value
+            if hasattr(conversation.status, "value")
+            else str(conversation.status)
+        )
+        if status_value != ConversationStatus.AI_ACTIVE.value:
             await self.dynamodb.update_conversation(
                 conversation_id=conversation_id,
                 status=ConversationStatus.AI_ACTIVE,
