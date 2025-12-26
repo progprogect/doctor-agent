@@ -56,6 +56,11 @@ class DynamoDBClient:
     async def create_conversation(self, conversation: Conversation) -> Conversation:
         """Create a new conversation."""
         item = conversation.model_dump(exclude_none=True)
+        # Convert datetime objects to ISO format strings for DynamoDB
+        if "created_at" in item and isinstance(item["created_at"], datetime):
+            item["created_at"] = item["created_at"].isoformat()
+        if "updated_at" in item and isinstance(item["updated_at"], datetime):
+            item["updated_at"] = item["updated_at"].isoformat()
         item["ttl"] = self._calculate_ttl(conversation.created_at)
 
         self.tables["conversations"].put_item(Item=item)
@@ -130,13 +135,16 @@ class DynamoDBClient:
         # In production, use GSI for agent_id and status
         filter_expression = None
         expression_attribute_values = {}
+        expression_attribute_names = {}
 
         if agent_id:
             filter_expression = "agent_id = :agent_id"
             expression_attribute_values[":agent_id"] = agent_id
 
         if status:
-            status_filter = "status = :status"
+            # Use ExpressionAttributeNames for reserved keywords like "status"
+            status_filter = "#status = :status"
+            expression_attribute_names["#status"] = "status"
             if filter_expression:
                 filter_expression += " AND " + status_filter
             else:
@@ -147,6 +155,8 @@ class DynamoDBClient:
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
+            if expression_attribute_names:
+                scan_kwargs["ExpressionAttributeNames"] = expression_attribute_names
 
         response = self.tables["conversations"].scan(**scan_kwargs)
         items = response.get("Items", [])
