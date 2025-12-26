@@ -33,7 +33,8 @@ class EscalationTool(BaseAgentTool):
     ):
         """Initialize escalation tool."""
         super().__init__(agent_id=agent_id)
-        self.escalation_service = escalation_service
+        # Use object.__setattr__ to bypass Pydantic validation for escalation_service
+        object.__setattr__(self, 'escalation_service', escalation_service)
 
     def _run(self, message: str, context: Optional[dict] = None) -> str:
         """Sync run (not used, but required by BaseTool)."""
