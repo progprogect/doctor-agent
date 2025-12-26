@@ -99,3 +99,4 @@ echo "✅ Готово! Проверьте статус через:"
 echo "   aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $REGION"
 
 
+

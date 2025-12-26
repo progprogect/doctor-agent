@@ -99,3 +99,4 @@ NEXT_PUBLIC_WS_URL=wss://ВАШ_ALB_DNS
 - ⚠️ Задача в private subnet (нужен NAT для доступа)
 
 
+
