@@ -60,7 +60,21 @@ class SecretsManager:
 
     async def get_openai_api_key(self) -> str:
         """Get OpenAI API key from Secrets Manager."""
-        return await self.get_secret(self.settings.secrets_manager_openai_key_name)
+        api_key = await self.get_secret(self.settings.secrets_manager_openai_key_name)
+        # Clean up the API key - remove any extra whitespace, quotes, or JSON artifacts
+        api_key = api_key.strip().strip('"').strip("'")
+        # Remove JSON-like artifacts if present (e.g., {"OPENAI_API_KEY": "value"} -> value)
+        if api_key.startswith('{') and api_key.endswith('}'):
+            try:
+                parsed = json.loads(api_key)
+                if isinstance(parsed, dict):
+                    for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
+                        if key in parsed:
+                            api_key = parsed[key]
+                            break
+            except json.JSONDecodeError:
+                pass
+        return api_key.strip().strip('"').strip("'")
 
     def clear_cache(self, secret_name: Optional[str] = None) -> None:
         """Clear cached secrets."""
