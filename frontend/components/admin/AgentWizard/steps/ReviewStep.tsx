@@ -29,7 +29,6 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   hasDraft = false,
 }) => {
   const [error, setError] = useState<string | null>(null);
-  const [yamlPreview, setYamlPreview] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editMode, setEditMode] = useState<"form" | "yaml" | "prompt">("form");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,6 +37,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   );
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [systemPersona, setSystemPersona] = useState<string>("");
+  const [isMounted, setIsMounted] = useState(false);
 
   // Initialize system persona from config or generate default
   useEffect(() => {
@@ -50,6 +50,11 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     }
   }, [config.system_persona, config.doctor_display_name, config.clinic_display_name]);
 
+  // Mark component as mounted to avoid SSR hydration issues
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Generate YAML preview
   const agentConfig = useMemo(() => {
     const baseConfig = editedConfig || formDataToAgentConfig(config as AgentConfigFormData);
@@ -60,15 +65,18 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     return baseConfig;
   }, [config, editedConfig, systemPersona]);
 
-  useEffect(() => {
+  // Generate YAML preview only on client side
+  const yamlPreview = useMemo(() => {
+    if (!isMounted) {
+      return ""; // Return empty string during SSR
+    }
     try {
       // Convert to YAML-like format (JSON with proper indentation)
-      const yaml = JSON.stringify(agentConfig, null, 2);
-      setYamlPreview(yaml);
+      return JSON.stringify(agentConfig, null, 2);
     } catch {
-      setYamlPreview("Error generating preview");
+      return "Error generating preview";
     }
-  }, [agentConfig]);
+  }, [agentConfig, isMounted]);
 
   const handleCreate = async () => {
     // Ensure agent_id is generated if missing

@@ -2,8 +2,18 @@
 
 "use client";
 
-import React, { useRef, useEffect } from "react";
-import Editor from "@monaco-editor/react";
+import React, { useRef, useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+// Dynamically import Monaco Editor to avoid SSR issues
+const Editor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[400px] border border-gray-300 rounded-sm bg-gray-50">
+      <p className="text-sm text-gray-500">Loading editor...</p>
+    </div>
+  ),
+});
 
 interface YAMLEditorProps {
   value: string;
@@ -23,6 +33,11 @@ export const YAMLEditor: React.FC<YAMLEditorProps> = ({
   error,
 }) => {
   const editorRef = useRef<any>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const handleEditorDidMount = (editor: any) => {
     editorRef.current = editor;
@@ -33,6 +48,23 @@ export const YAMLEditor: React.FC<YAMLEditorProps> = ({
       onChange(value);
     }
   };
+
+  if (!isMounted) {
+    return (
+      <div className="w-full">
+        <div
+          className={`border rounded-sm overflow-hidden ${
+            error ? "border-red-500" : "border-gray-300"
+          }`}
+        >
+          <div className="flex items-center justify-center" style={{ height }}>
+            <p className="text-sm text-gray-500">Loading editor...</p>
+          </div>
+        </div>
+        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
