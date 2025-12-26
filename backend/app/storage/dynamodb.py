@@ -166,6 +166,9 @@ class DynamoDBClient:
     async def create_message(self, message: Message) -> Message:
         """Create a new message."""
         item = message.model_dump(exclude_none=True)
+        # Convert datetime objects to ISO format strings for DynamoDB
+        if "timestamp" in item and isinstance(item["timestamp"], datetime):
+            item["timestamp"] = item["timestamp"].isoformat()
         item["ttl"] = self._calculate_ttl(message.timestamp)
 
         self.tables["messages"].put_item(Item=item)
