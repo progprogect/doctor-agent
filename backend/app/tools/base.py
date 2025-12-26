@@ -18,11 +18,14 @@ class BaseAgentTool(BaseTool, ABC):
 
     name: str
     description: str
+    agent_id: Optional[str] = None
 
     def __init__(self, agent_id: Optional[str] = None, **kwargs):
         """Initialize tool."""
+        # Set agent_id in kwargs so Pydantic can validate it
+        if agent_id is not None:
+            kwargs['agent_id'] = agent_id
         super().__init__(**kwargs)
-        self.agent_id = agent_id
 
     @abstractmethod
     async def _arun(self, *args, **kwargs):
