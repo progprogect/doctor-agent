@@ -162,7 +162,7 @@ async def send_message(
     )
     conversation_history = [
         {
-            "role": msg.role.value,
+            "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
             "content": msg.content,
         }
         for msg in history_messages
