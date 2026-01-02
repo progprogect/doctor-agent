@@ -20,6 +20,20 @@ class OpenAIClientWrapper:
 
     def __init__(self, api_key: str, settings: Settings):
         """Initialize OpenAI client."""
+        # Ensure API key is clean (no JSON artifacts)
+        api_key = api_key.strip().strip('"').strip("'")
+        if api_key.startswith('{') and api_key.endswith('}'):
+            try:
+                import json
+                parsed = json.loads(api_key)
+                if isinstance(parsed, dict):
+                    for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
+                        if key in parsed:
+                            api_key = parsed[key]
+                            break
+            except Exception:
+                pass
+        api_key = api_key.strip().strip('"').strip("'")
         self.api_key = api_key
         self.settings = settings
         self._async_client: Optional[AsyncOpenAI] = None
