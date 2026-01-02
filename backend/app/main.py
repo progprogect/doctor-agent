@@ -48,12 +48,12 @@ async def lifespan(app: FastAPI):
     from app.utils.openai_client import get_llm_factory
     
     secrets_manager = get_secrets_manager()
-    secrets_manager.clear_cache()
+    secrets_manager.clear_cache()  # Clear all secret caches
     
     llm_factory = get_llm_factory()
-    llm_factory.clear_cache()
+    llm_factory.clear_cache()  # Clear all client caches
     
-    logger.info("Caches cleared on startup")
+    logger.info("All caches cleared on startup")
     yield
     # Shutdown
     logger.info("Application shutting down")
