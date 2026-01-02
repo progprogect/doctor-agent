@@ -27,7 +27,22 @@ class SecretsManager:
     async def get_secret(self, secret_name: str, use_cache: bool = True) -> str:
         """Get secret value from Secrets Manager."""
         if use_cache and secret_name in self._cache:
-            return self._cache[secret_name]
+            cached_value = self._cache[secret_name]
+            # Ensure cached value is also cleaned
+            if isinstance(cached_value, str):
+                cached_value = cached_value.strip().strip('"').strip("'")
+                if cached_value.startswith('{') and cached_value.endswith('}'):
+                    try:
+                        parsed = json.loads(cached_value)
+                        if isinstance(parsed, dict):
+                            for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
+                                if key in parsed:
+                                    cached_value = parsed[key]
+                                    break
+                    except json.JSONDecodeError:
+                        pass
+                cached_value = cached_value.strip().strip('"').strip("'")
+            return cached_value
 
         try:
             response = self.client.get_secret_value(SecretId=secret_name)
@@ -46,6 +61,23 @@ class SecretsManager:
             except json.JSONDecodeError:
                 # Not JSON, use as-is
                 pass
+
+            # Clean up the secret value - remove any extra whitespace, quotes, or JSON artifacts
+            secret_value = secret_value.strip().strip('"').strip("'")
+            # If it still looks like JSON (starts with {), try parsing again (double-encoded case)
+            if secret_value.startswith('{') and secret_value.endswith('}'):
+                try:
+                    parsed = json.loads(secret_value)
+                    if isinstance(parsed, dict):
+                        for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
+                            if key in parsed:
+                                secret_value = parsed[key]
+                                break
+                except json.JSONDecodeError:
+                    pass
+
+            # Final cleanup
+            secret_value = secret_value.strip().strip('"').strip("'")
 
             if use_cache:
                 self._cache[secret_name] = secret_value
