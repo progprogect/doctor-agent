@@ -129,25 +129,13 @@ class LLMFactory:
             if not api_key:
                 try:
                     api_key = await self.secrets_manager.get_openai_api_key()
-                    # Ensure API key is clean (no JSON artifacts)
-                    api_key = api_key.strip().strip('"').strip("'")
-                    if api_key.startswith('{') and api_key.endswith('}'):
-                        try:
-                            import json
-                            parsed = json.loads(api_key)
-                            if isinstance(parsed, dict):
-                                for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
-                                    if key in parsed:
-                                        api_key = parsed[key]
-                                        break
-                        except Exception:
-                            pass
-                    api_key = api_key.strip().strip('"').strip("'")
                 except Exception as e:
                     raise RuntimeError(
                         "OpenAI API key not found in settings or Secrets Manager"
                     ) from e
 
+            # Clean API key before creating client
+            api_key = self._clean_api_key(api_key)
             self._clients[cache_key] = OpenAIClientWrapper(api_key, self.settings)
 
         return self._clients[cache_key]
