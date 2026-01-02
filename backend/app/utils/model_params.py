@@ -11,8 +11,6 @@ MODELS_REQUIRING_MAX_COMPLETION_TOKENS = {
     "gpt-4o-2024-11-06",
     "gpt-4o-2024-08-06",
     "gpt-4o-2024-05-13",
-    # Also check for version-like patterns (e.g., "5.2" might be a variant)
-    "5.2",
 }
 
 
@@ -38,6 +36,7 @@ def requires_max_completion_tokens(model: str) -> bool:
             return True
     
     # Check for o1/o3 variants (e.g., "o1-*", "o3-*")
+    # Only o1 and o3 models require max_completion_tokens
     if model_lower.startswith("o1-") or model_lower.startswith("o3-"):
         return True
     
