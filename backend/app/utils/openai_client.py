@@ -118,6 +118,22 @@ class LLMFactory:
         self.settings = settings
         self.secrets_manager = secrets_manager
         self._clients: dict[str, OpenAIClientWrapper] = {}
+    
+    def _clean_api_key(self, api_key: str) -> str:
+        """Clean API key from any JSON artifacts."""
+        api_key = api_key.strip().strip('"').strip("'")
+        if api_key.startswith('{') and api_key.endswith('}'):
+            try:
+                import json
+                parsed = json.loads(api_key)
+                if isinstance(parsed, dict):
+                    for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
+                        if key in parsed:
+                            api_key = parsed[key]
+                            break
+            except Exception:
+                pass
+        return api_key.strip().strip('"').strip("'")
 
     async def get_client(self, agent_id: Optional[str] = None) -> OpenAIClientWrapper:
         """Get OpenAI client for agent (cached per agent)."""
