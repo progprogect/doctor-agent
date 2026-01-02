@@ -1,5 +1,6 @@
 """OpenAI client wrapper with retry logic."""
 
+import logging
 from functools import lru_cache
 from typing import Optional
 
@@ -14,15 +15,19 @@ from tenacity import (
 from app.config import Settings, get_settings
 from app.storage.secrets import SecretsManager, get_secrets_manager
 
+logger = logging.getLogger(__name__)
+
 
 class OpenAIClientWrapper:
     """OpenAI client wrapper with retry and error handling."""
 
     def __init__(self, api_key: str, settings: Settings):
         """Initialize OpenAI client."""
+        logger.debug(f"[OPENAI_CLIENT] __init__() called with api_key (first 20 chars): {repr(api_key[:20]) if len(api_key) > 20 else repr(api_key)}")
         # Ensure API key is clean (no JSON artifacts)
         api_key = api_key.strip().strip('"').strip("'")
         if api_key.startswith('{') and api_key.endswith('}'):
+            logger.warning(f"[OPENAI_CLIENT] API key looks like JSON in __init__! Attempting extraction...")
             try:
                 import json
                 parsed = json.loads(api_key)
@@ -30,10 +35,13 @@ class OpenAIClientWrapper:
                     for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
                         if key in parsed:
                             api_key = parsed[key]
+                            logger.debug(f"[OPENAI_CLIENT] Extracted from JSON using key '{key}': {repr(api_key[:20])}...")
                             break
-            except Exception:
+            except Exception as e:
+                logger.error(f"[OPENAI_CLIENT] Error extracting from JSON in __init__: {e}")
                 pass
         api_key = api_key.strip().strip('"').strip("'")
+        logger.debug(f"[OPENAI_CLIENT] Final api_key stored in self.api_key (first 10 chars): {repr(api_key[:10])}..., starts_with_sk: {api_key.startswith('sk-')}, starts_with_brace: {api_key.startswith('{')}")
         self.api_key = api_key
         self.settings = settings
         self._async_client: Optional[AsyncOpenAI] = None
@@ -43,12 +51,14 @@ class OpenAIClientWrapper:
     def async_client(self) -> AsyncOpenAI:
         """Get async OpenAI client."""
         if self._async_client is None:
+            logger.debug(f"[OPENAI_CLIENT] Creating async_client, self.api_key (first 20 chars): {repr(self.api_key[:20]) if len(self.api_key) > 20 else repr(self.api_key)}")
             # Ensure api_key is a clean string, not JSON
             api_key = self.api_key
             if isinstance(api_key, str):
                 api_key = api_key.strip().strip('"').strip("'")
                 # If it looks like JSON, try to extract the actual key
                 if api_key.startswith('{') and api_key.endswith('}'):
+                    logger.warning(f"[OPENAI_CLIENT] api_key looks like JSON in async_client property! Attempting extraction...")
                     try:
                         import json
                         parsed = json.loads(api_key)
@@ -56,10 +66,13 @@ class OpenAIClientWrapper:
                             for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
                                 if key in parsed and isinstance(parsed[key], str):
                                     api_key = parsed[key]
+                                    logger.debug(f"[OPENAI_CLIENT] Extracted from JSON: {repr(api_key[:20])}...")
                                     break
-                    except Exception:
+                    except Exception as e:
+                        logger.error(f"[OPENAI_CLIENT] Error extracting from JSON in async_client: {e}")
                         pass
                 api_key = api_key.strip().strip('"').strip("'")
+            logger.debug(f"[OPENAI_CLIENT] Creating AsyncOpenAI with api_key (first 10 chars): {repr(api_key[:10])}..., starts_with_sk: {api_key.startswith('sk-')}")
             self._async_client = AsyncOpenAI(api_key=api_key, timeout=self.settings.openai_timeout)
         return self._async_client
 
@@ -155,8 +168,10 @@ class LLMFactory:
     
     def _clean_api_key(self, api_key: str) -> str:
         """Clean API key from any JSON artifacts."""
+        logger.debug(f"[LLM_FACTORY] _clean_api_key() input (first 20 chars): {repr(api_key[:20]) if len(api_key) > 20 else repr(api_key)}")
         api_key = api_key.strip().strip('"').strip("'")
         if api_key.startswith('{') and api_key.endswith('}'):
+            logger.warning(f"[LLM_FACTORY] API key looks like JSON! Attempting extraction...")
             try:
                 import json
                 parsed = json.loads(api_key)
@@ -164,28 +179,37 @@ class LLMFactory:
                     for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
                         if key in parsed:
                             api_key = parsed[key]
+                            logger.debug(f"[LLM_FACTORY] Extracted from JSON using key '{key}': {repr(api_key[:20])}...")
                             break
-            except Exception:
+            except Exception as e:
+                logger.error(f"[LLM_FACTORY] Error extracting from JSON: {e}")
                 pass
-        return api_key.strip().strip('"').strip("'")
+        api_key = api_key.strip().strip('"').strip("'")
+        logger.debug(f"[LLM_FACTORY] _clean_api_key() output (first 20 chars): {repr(api_key[:20]) if len(api_key) > 20 else repr(api_key)}, starts_with_sk: {api_key.startswith('sk-')}")
+        return api_key
 
     async def get_client(self, agent_id: Optional[str] = None) -> OpenAIClientWrapper:
         """Get OpenAI client for agent (cached per agent)."""
         cache_key = agent_id or "default"
 
         if cache_key not in self._clients:
+            logger.debug(f"[LLM_FACTORY] Creating new client for cache_key: {cache_key}")
             # Get API key from settings or Secrets Manager
             api_key = self.settings.openai_api_key
             if not api_key:
+                logger.debug(f"[LLM_FACTORY] No API key in settings, fetching from Secrets Manager...")
                 try:
                     api_key = await self.secrets_manager.get_openai_api_key()
+                    logger.debug(f"[LLM_FACTORY] Received API key from Secrets Manager (first 10 chars): {repr(api_key[:10])}...")
                 except Exception as e:
+                    logger.error(f"[LLM_FACTORY] Failed to get API key from Secrets Manager: {e}")
                     raise RuntimeError(
                         "OpenAI API key not found in settings or Secrets Manager"
                     ) from e
 
             # Clean API key before creating client
             api_key = self._clean_api_key(api_key)
+            logger.debug(f"[LLM_FACTORY] Creating OpenAIClientWrapper with cleaned API key (first 10 chars): {repr(api_key[:10])}..., starts_with_sk: {api_key.startswith('sk-')}")
             self._clients[cache_key] = OpenAIClientWrapper(api_key, self.settings)
 
         return self._clients[cache_key]
