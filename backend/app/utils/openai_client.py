@@ -43,14 +43,48 @@ class OpenAIClientWrapper:
     def async_client(self) -> AsyncOpenAI:
         """Get async OpenAI client."""
         if self._async_client is None:
-            self._async_client = AsyncOpenAI(api_key=self.api_key, timeout=self.settings.openai_timeout)
+            # Ensure api_key is a clean string, not JSON
+            api_key = self.api_key
+            if isinstance(api_key, str):
+                api_key = api_key.strip().strip('"').strip("'")
+                # If it looks like JSON, try to extract the actual key
+                if api_key.startswith('{') and api_key.endswith('}'):
+                    try:
+                        import json
+                        parsed = json.loads(api_key)
+                        if isinstance(parsed, dict):
+                            for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
+                                if key in parsed and isinstance(parsed[key], str):
+                                    api_key = parsed[key]
+                                    break
+                    except Exception:
+                        pass
+                api_key = api_key.strip().strip('"').strip("'")
+            self._async_client = AsyncOpenAI(api_key=api_key, timeout=self.settings.openai_timeout)
         return self._async_client
 
     @property
     def sync_client(self) -> OpenAI:
         """Get sync OpenAI client."""
         if self._sync_client is None:
-            self._sync_client = OpenAI(api_key=self.api_key, timeout=self.settings.openai_timeout)
+            # Ensure api_key is a clean string, not JSON
+            api_key = self.api_key
+            if isinstance(api_key, str):
+                api_key = api_key.strip().strip('"').strip("'")
+                # If it looks like JSON, try to extract the actual key
+                if api_key.startswith('{') and api_key.endswith('}'):
+                    try:
+                        import json
+                        parsed = json.loads(api_key)
+                        if isinstance(parsed, dict):
+                            for key in ["OPENAI_API_KEY", "openai_api_key", "api_key", "value"]:
+                                if key in parsed and isinstance(parsed[key], str):
+                                    api_key = parsed[key]
+                                    break
+                    except Exception:
+                        pass
+                api_key = api_key.strip().strip('"').strip("'")
+            self._sync_client = OpenAI(api_key=api_key, timeout=self.settings.openai_timeout)
         return self._sync_client
 
     @retry(
