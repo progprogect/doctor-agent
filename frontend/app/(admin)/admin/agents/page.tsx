@@ -173,19 +173,19 @@ export default function AgentsPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={() => handleCloneAgent(agent)}
-                      className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200"
+                      className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200 cursor-pointer"
                       title="Clone this agent"
                     >
                       Clone
                     </button>
                     <button
                       onClick={() => handleEditAgent(agent)}
-                      className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200"
+                      className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200 cursor-pointer"
                       title="Edit this agent"
                     >
                       Edit
                     </button>
-                    <button className="text-red-600 hover:text-red-700 transition-colors duration-200">
+                    <button className="text-red-600 hover:text-red-700 transition-colors duration-200 cursor-pointer">
                       Delete
                     </button>
                   </td>
