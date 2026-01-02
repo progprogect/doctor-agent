@@ -31,20 +31,25 @@ class SecretsManager:
         """Get secret value from Secrets Manager."""
         if use_cache and secret_name in self._cache:
             cached_value = self._cache[secret_name]
+            logger.info(f"[SECRETS] Found cached value for {secret_name} (first 50 chars): {repr(cached_value[:50]) if len(cached_value) > 50 else repr(cached_value)}")
             # Ensure cached value is clean (should never be JSON, but check just in case)
             if isinstance(cached_value, str):
                 cached_value = cached_value.strip()
                 # If cached value is JSON, something went wrong - extract it
                 if cached_value.startswith('{') and cached_value.endswith('}'):
+                    logger.warning(f"[SECRETS] Cached value is JSON! Extracting...")
                     try:
                         parsed = json.loads(cached_value)
                         if isinstance(parsed, dict):
                             for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
                                 if key in parsed and isinstance(parsed[key], str):
                                     cached_value = parsed[key].strip()
+                                    logger.info(f"[SECRETS] Extracted from cached JSON using key '{key}': {repr(cached_value[:20])}...")
                                     break
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as e:
+                        logger.error(f"[SECRETS] Error parsing cached JSON: {e}")
                         pass
+            logger.info(f"[SECRETS] Returning cached value (first 20 chars): {repr(cached_value[:20]) if len(cached_value) > 20 else repr(cached_value)}, starts_with_sk: {cached_value.startswith('sk-') if isinstance(cached_value, str) else False}, starts_with_brace: {cached_value.startswith('{') if isinstance(cached_value, str) else False}")
             return cached_value
 
         try:
