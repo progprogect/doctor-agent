@@ -38,6 +38,35 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [systemPersona, setSystemPersona] = useState<string>("");
   const [isMounted, setIsMounted] = useState(false);
+  
+  // Check if we're editing an existing agent
+  const isEditMode = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const draft = localStorage.getItem("agent_wizard_draft");
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        return parsed.isEdit === true && !!parsed.editingAgentId;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }, []);
+  
+  const editingAgentId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const draft = localStorage.getItem("agent_wizard_draft");
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        return parsed.isEdit ? parsed.editingAgentId : null;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }, []);
 
   // Initialize system persona from config or generate default
   useEffect(() => {
@@ -80,9 +109,11 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
   }, [agentConfig, isMounted]);
 
   const handleCreate = async () => {
-    // Ensure agent_id is generated if missing
-    let agentId = config.agent_id;
-    if (!agentId && config.clinic_display_name) {
+    // In edit mode, use the existing agent_id
+    let agentId = isEditMode ? editingAgentId : config.agent_id;
+    
+    // For new agents, ensure agent_id is generated if missing
+    if (!isEditMode && !agentId && config.clinic_display_name) {
       agentId = generateAgentId(
         config.clinic_display_name,
         config.doctor_display_name
@@ -97,7 +128,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     // Validate JSON if in YAML edit mode
     if (editMode === "yaml") {
       if (!editedConfig || jsonError) {
-        setError("Invalid JSON configuration. Please fix the errors before creating the agent.");
+        setError(`Invalid JSON configuration. Please fix the errors before ${isEditMode ? "updating" : "creating"} the agent.`);
         return;
       }
     }
@@ -106,63 +137,74 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     setError(null);
 
     try {
-      // Try to create agent, handle ID conflicts by adding suffix
-      let finalAgentId = agentId;
-      let attempts = 0;
-      const maxAttempts = 10;
+      // Use edited config if in YAML mode, otherwise use form data
+      const finalConfig =
+        editMode === "yaml" && editedConfig
+          ? editedConfig
+          : formDataToAgentConfig({ ...config, agent_id: agentId } as AgentConfigFormData);
 
-      while (attempts < maxAttempts) {
-        try {
-          // Use edited config if in YAML mode, otherwise use form data
-          const finalConfig =
-            editMode === "yaml" && editedConfig
-              ? editedConfig
-              : formDataToAgentConfig({ ...config, agent_id: finalAgentId } as AgentConfigFormData);
+      // Update system persona if edited
+      if (systemPersona && finalConfig.prompts?.system) {
+        finalConfig.prompts.system.persona = systemPersona;
+      }
 
-          // Update system persona if edited
-          if (systemPersona && finalConfig.prompts?.system) {
-            finalConfig.prompts.system.persona = systemPersona;
-          }
+      // Ensure agent_id is set in config
+      finalConfig.agent_id = agentId;
 
-          // Ensure agent_id is set in config
-          finalConfig.agent_id = finalAgentId;
+      if (isEditMode) {
+        // Update existing agent
+        await api.updateAgent(agentId, finalConfig);
+      } else {
+        // Create new agent, handle ID conflicts by adding suffix
+        let finalAgentId = agentId;
+        let attempts = 0;
+        const maxAttempts = 10;
 
-          await api.createAgent(finalAgentId, finalConfig);
-          
-          // Success - call onSubmit to trigger success handler in parent
-          // Note: We don't need to update config here as agent is already created
-          await onSubmit();
-          return; // Success, exit function
-        } catch (err) {
-          // Check if it's a conflict error (409) and we can retry with suffix
-          const isConflictError =
-            err instanceof ApiError &&
-            (err.code === "409" || err.message.includes("already exists"));
-          
-          if (isConflictError && attempts < maxAttempts - 1) {
-            // Agent ID already exists, try with suffix
-            attempts++;
-            // Keep base ID shorter to leave room for suffix (max 3 chars for _10)
-            // Agent ID max length is 50, so we keep base at 45 to allow _10
-            const baseId = finalAgentId.length > 45 ? finalAgentId.substring(0, 45) : finalAgentId;
-            finalAgentId = `${baseId}_${attempts + 1}`;
-            continue; // Retry with new ID
-          } else {
-            // Other error or max attempts reached
-            if (err instanceof ApiError) {
-              if (isConflictError && attempts >= maxAttempts - 1) {
-                setError(
-                  `Agent ID "${finalAgentId}" already exists. Please edit the Agent ID manually in the JSON Editor to make it unique.`
-                );
-              } else {
-                setError(err.message);
-              }
+        while (attempts < maxAttempts) {
+          try {
+            finalConfig.agent_id = finalAgentId;
+            await api.createAgent(finalAgentId, finalConfig);
+            break; // Success, exit loop
+          } catch (err) {
+            // Check if it's a conflict error (409) and we can retry with suffix
+            const isConflictError =
+              err instanceof ApiError &&
+              (err.code === "409" || err.message.includes("already exists"));
+            
+            if (isConflictError && attempts < maxAttempts - 1) {
+              // Agent ID already exists, try with suffix
+              attempts++;
+              // Keep base ID shorter to leave room for suffix (max 3 chars for _10)
+              // Agent ID max length is 50, so we keep base at 45 to allow _10
+              const baseId = finalAgentId.length > 45 ? finalAgentId.substring(0, 45) : finalAgentId;
+              finalAgentId = `${baseId}_${attempts + 1}`;
+              continue; // Retry with new ID
             } else {
-              setError("Failed to create agent. Please try again.");
+              // Other error or max attempts reached
+              if (err instanceof ApiError) {
+                if (isConflictError && attempts >= maxAttempts - 1) {
+                  setError(
+                    `Agent ID "${finalAgentId}" already exists. Please edit the Agent ID manually in the JSON Editor to make it unique.`
+                  );
+                } else {
+                  setError(err.message);
+                }
+              } else {
+                setError("Failed to create agent. Please try again.");
+              }
+              return;
             }
-            return;
           }
         }
+      }
+      
+      // Success - call onSubmit to trigger success handler in parent
+      await onSubmit();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError(`Failed to ${isEditMode ? "update" : "create"} agent. Please try again.`);
       }
     } finally {
       setIsSubmitting(false);
@@ -188,10 +230,12 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Review Configuration
+          {isEditMode ? "Review and Update Configuration" : "Review Configuration"}
         </h3>
         <p className="text-sm text-gray-600 mb-6">
-          Review your agent configuration before creating.
+          {isEditMode 
+            ? "Review your agent configuration before updating."
+            : "Review your agent configuration before creating."}
         </p>
       </div>
 
@@ -337,7 +381,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
         <div className="flex items-center justify-center py-8">
           <LoadingSpinner size="lg" />
           <span className="ml-3 text-gray-600">
-            Creating agent and indexing documents...
+            {isEditMode ? "Updating agent and indexing documents..." : "Creating agent and indexing documents..."}
           </span>
         </div>
       )}
@@ -368,7 +412,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
           </div>
           <div>
             <Button variant="primary" onClick={handleCreate} size="lg">
-              Create Agent
+              {isEditMode ? "Update Agent" : "Create Agent"}
             </Button>
           </div>
         </div>

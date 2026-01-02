@@ -42,6 +42,21 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
     clearDraft,
     hasDraft,
   } = useAgentWizard();
+  
+  // Check if we're editing an existing agent
+  const isEditMode = React.useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const draft = localStorage.getItem("agent_wizard_draft");
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        return parsed.isEdit === true && !!parsed.editingAgentId;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }, []);
 
   const handleNext = () => {
     if (nextStep()) {
@@ -152,7 +167,7 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-sm shadow-md border border-[#D4AF37]/20 p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">
-          Create New Agent
+          {isEditMode ? "Edit Agent" : "Create New Agent"}
         </h2>
 
         <WizardProgress

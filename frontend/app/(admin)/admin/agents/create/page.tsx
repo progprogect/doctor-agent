@@ -38,6 +38,7 @@ export default function CreateAgentPage() {
                   const draft = JSON.parse(
                     localStorage.getItem("agent_wizard_draft") || "{}"
                   );
+                  if (draft.isEdit) return "Editing agent:";
                   return draft.isClone
                     ? "Cloning agent:"
                     : "Draft detected:";
@@ -51,6 +52,9 @@ export default function CreateAgentPage() {
                 const draft = JSON.parse(
                   localStorage.getItem("agent_wizard_draft") || "{}"
                 );
+                if (draft.isEdit) {
+                  return `Configuration for "${draft.editingAgentId}" has been loaded. Make your changes and click "Update Agent" when ready.`;
+                }
                 return draft.isClone
                   ? `Configuration from "${draft.sourceAgentId}" has been loaded. Please review and update the Agent ID.`
                   : "Your previous progress has been restored.";

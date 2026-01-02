@@ -67,6 +67,32 @@ export default function AgentsPage() {
     }
   };
 
+  const handleEditAgent = async (agent: Agent) => {
+    try {
+      // Convert agent config to form data and save to localStorage
+      const formData = agentConfigToFormData(agent.config);
+      
+      // Keep the original agent_id for editing
+      formData.agent_id = agent.agent_id;
+
+      // Save as draft with edit flag
+      const draft = {
+        currentStep: 1,
+        config: formData,
+        timestamp: Date.now(),
+        isEdit: true,
+        editingAgentId: agent.agent_id,
+      };
+      localStorage.setItem("agent_wizard_draft", JSON.stringify(draft));
+
+      // Navigate to create page (which handles both create and edit)
+      router.push("/admin/agents/create");
+    } catch (err) {
+      console.error("Failed to load agent for editing:", err);
+      setError("Failed to load agent for editing. Please try again.");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -152,7 +178,11 @@ export default function AgentsPage() {
                     >
                       Clone
                     </button>
-                    <button className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200">
+                    <button
+                      onClick={() => handleEditAgent(agent)}
+                      className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200"
+                      title="Edit this agent"
+                    >
                       Edit
                     </button>
                     <button className="text-red-600 hover:text-red-700 transition-colors duration-200">

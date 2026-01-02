@@ -46,9 +46,9 @@ class AgentChain:
             }
             
             # Use max_completion_tokens for o1/o3 and newer models, max_tokens for others
-            # Note: ChatOpenAI may not directly support max_completion_tokens, so we use model_kwargs
             if requires_max_completion_tokens(self.agent_config.llm.model):
                 # For models requiring max_completion_tokens, pass via model_kwargs
+                # ChatOpenAI will pass these kwargs directly to OpenAI API
                 llm_kwargs["model_kwargs"] = {"max_completion_tokens": self.agent_config.llm.max_output_tokens}
             else:
                 llm_kwargs["max_tokens"] = self.agent_config.llm.max_output_tokens
