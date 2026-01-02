@@ -93,8 +93,20 @@ Return a structured response with:
                     "context": context_str or "No previous context",
                 }
             )
-            # LLMChain with PydanticOutputParser returns dict, convert to EscalationDecision
+            # LLMChain with PydanticOutputParser may return dict or EscalationDecision
+            # Check if result is already EscalationDecision
+            if isinstance(result, EscalationDecision):
+                return result
+            # If result is dict, check if it has the expected structure
             if isinstance(result, dict):
+                # Extract from 'text' key if present (LLMChain output format)
+                if 'text' in result:
+                    parsed = result['text']
+                    if isinstance(parsed, EscalationDecision):
+                        return parsed
+                    elif isinstance(parsed, dict):
+                        return EscalationDecision(**parsed)
+                # Otherwise, try to create EscalationDecision directly from result
                 return EscalationDecision(**result)
             return result
         except Exception as e:
