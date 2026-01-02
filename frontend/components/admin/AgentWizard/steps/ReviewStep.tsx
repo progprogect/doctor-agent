@@ -44,11 +44,12 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     if (config.system_persona) {
       setSystemPersona(config.system_persona);
     } else if (config.doctor_display_name && config.clinic_display_name) {
+      const specialtyPart = config.specialty ? `\nТвоя специализация: {specialty}.` : "";
       setSystemPersona(
-        `Ты общаешься от лица врача ${config.doctor_display_name} из ${config.clinic_display_name}.\nТвой стиль — дружелюбный и профессиональный. Ты помогаешь с информацией и записью.\nТы НЕ ведёшь медицинскую консультацию в чате.`
+        `Ты общаешься от лица врача {doctor_display_name} из {clinic_display_name}.${specialtyPart}\nТвой стиль — дружелюбный и профессиональный. Ты помогаешь с информацией и записью.\nТы НЕ ведёшь медицинскую консультацию в чате.`
       );
     }
-  }, [config.system_persona, config.doctor_display_name, config.clinic_display_name]);
+  }, [config.system_persona, config.doctor_display_name, config.clinic_display_name, config.specialty]);
 
   // Mark component as mounted to avoid SSR hydration issues
   useEffect(() => {
@@ -236,6 +237,12 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
               </span>
             </div>
           )}
+          <div className="flex justify-between">
+            <span className="text-gray-600">Examples:</span>
+            <span className="font-medium text-gray-900">
+              {config.examples?.length || 0}
+            </span>
+          </div>
         </div>
       </div>
 

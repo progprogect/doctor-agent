@@ -84,13 +84,28 @@ class AgentChain:
         """Build system prompt from agent config."""
         prompts = self.agent_config.prompts.system
 
+        # Format persona with profile information
         persona = prompts.get("persona", "").format(
             doctor_display_name=self.agent_config.profile.doctor_display_name,
             clinic_display_name=self.agent_config.profile.clinic_display_name,
+            specialty=self.agent_config.profile.specialty,
         )
 
         hard_rules = prompts.get("hard_rules", "")
         goal = prompts.get("goal", "")
+
+        # Build profile information section
+        profile = self.agent_config.profile
+        languages_str = ", ".join(profile.languages)
+        profile_info = f"""
+Profile Information:
+- Doctor: {profile.doctor_display_name}
+- Clinic: {profile.clinic_display_name}
+- Specialty: {profile.specialty}
+- Languages: {languages_str}
+
+You can communicate in these languages. Respond in the same language the user uses, or ask which language they prefer if unclear.
+"""
 
         # Build style description from config
         style = self.agent_config.style
@@ -106,21 +121,49 @@ Communication Style Guidelines:
 Apply these style guidelines consistently in all your responses. Adjust your communication to match these parameters while maintaining professionalism and medical safety.
 """
 
-        return f"""{persona}
+        # Build few-shot examples section (English only)
+        examples_section = ""
+        if self.agent_config.prompts.examples:
+            examples_list = []
+            for i, example in enumerate(self.agent_config.prompts.examples, 1):
+                examples_list.append(
+                    f"Example {i}:\n"
+                    f"User: {example.user_message}\n"
+                    f"Agent: {example.agent_response}"
+                )
 
-{hard_rules}
+            examples_section = f"""
+Examples of desired communication style:
 
-{goal}
+{chr(10).join(examples_list)}
 
-{style_description}
+Follow these examples as a guide for your communication style, tone, and approach. 
+Match the level of formality, empathy, and detail shown in these examples. 
+Note: These examples are in English, but you should respond in the language 
+the user uses (as specified in your language capabilities).
+"""
 
-Remember:
+        # Build final prompt with proper spacing
+        prompt_parts = [
+            persona,
+            profile_info,
+            hard_rules,
+            goal,
+            style_description,
+        ]
+        
+        if examples_section:
+            prompt_parts.append(examples_section)
+        
+        prompt_parts.append("""Remember:
 - Be friendly and professional
 - Never provide medical diagnoses or treatment advice
 - Escalate urgent or medical questions to human
 - Help with booking appointments
 - Use available tools when needed
-"""
+""")
+        
+        return "\n\n".join(prompt_parts)
 
     async def generate_response(
         self,
@@ -136,10 +179,11 @@ Remember:
         if rag_context:
             input_text = f"Context:\n{rag_context}\n\nUser message: {user_message}"
 
-        # Prepare chat history
+        # Prepare chat history (last 50 messages for context)
+        # Note: Consider token limits - 50 messages ≈ 2000-3000 tokens
         chat_history = []
         if conversation_history:
-            for msg in conversation_history[-5:]:  # Last 5 messages
+            for msg in conversation_history[-50:]:  # Last 50 messages
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 if role == "user":

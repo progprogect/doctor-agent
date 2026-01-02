@@ -51,8 +51,6 @@ profile:
   clinic_display_name: "Elemental Clinic"
   specialty: "[Специализация врача]"
   languages: ["ru", "en"]           # язык определяется реальными компетенциями :contentReference[oaicite:7]{index=7}
-  geo: "Dubai"
-  audience: "new_patients_only"     # повторные пациенты только человек :contentReference[oaicite:8]{index=8}
 
 style:
   tone: "friendly_professional"

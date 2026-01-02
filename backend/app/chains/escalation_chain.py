@@ -93,22 +93,29 @@ Return a structured response with:
                     "context": context_str or "No previous context",
                 }
             )
-            # LLMChain with PydanticOutputParser may return dict or EscalationDecision
-            # Check if result is already EscalationDecision
-            if isinstance(result, EscalationDecision):
-                return result
-            # If result is dict, check if it has the expected structure
+            # LLMChain with PydanticOutputParser returns dict with 'text' key
+            # The 'text' value contains the parsed EscalationDecision as dict
             if isinstance(result, dict):
-                # Extract from 'text' key if present (LLMChain output format)
+                # Extract from 'text' key (LLMChain output format)
                 if 'text' in result:
                     parsed = result['text']
                     if isinstance(parsed, EscalationDecision):
                         return parsed
                     elif isinstance(parsed, dict):
                         return EscalationDecision(**parsed)
-                # Otherwise, try to create EscalationDecision directly from result
+                # If no 'text' key, try to create EscalationDecision directly from result
                 return EscalationDecision(**result)
-            return result
+            # If result is already EscalationDecision, return as-is
+            if isinstance(result, EscalationDecision):
+                return result
+            # Fallback: try to create from result
+            return EscalationDecision(**result) if hasattr(result, '__dict__') else EscalationDecision(
+                needs_escalation=False,
+                escalation_type=EscalationType.NONE,
+                confidence=0.0,
+                reason=f"Unexpected result type: {type(result)}",
+                suggested_action="continue_with_ai",
+            )
         except Exception as e:
             # On error, default to no escalation
             return EscalationDecision(

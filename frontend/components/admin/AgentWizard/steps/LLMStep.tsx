@@ -17,9 +17,30 @@ interface LLMStepProps {
 }
 
 const MODEL_OPTIONS = [
-  { value: "gpt-4o-mini", label: "GPT-4o Mini (Fast, Cost-effective)" },
-  { value: "gpt-4o", label: "GPT-4o (Higher Quality)" },
-  { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+  // GPT-5 Series (Latest & Best)
+  { value: "gpt-5.2", label: "GPT-5.2 (Latest, Best for Agents) ⭐", description: "Best model for coding and agentic tasks across industries" },
+  { value: "gpt-5.1", label: "GPT-5.1 (Best with Reasoning)", description: "Best for coding and agentic tasks with configurable reasoning effort" },
+  { value: "gpt-5", label: "GPT-5 (Intelligent Reasoning)", description: "Previous intelligent reasoning model for coding and agentic tasks" },
+  { value: "gpt-5-mini", label: "GPT-5 Mini (Fast & Efficient)", description: "Faster, cost-efficient version for well-defined tasks" },
+  { value: "gpt-5-nano", label: "GPT-5 Nano (Fastest & Cheapest)", description: "Fastest, most cost-efficient version" },
+  
+  // GPT-4 Series (Current Standard)
+  { value: "gpt-4.1", label: "GPT-4.1 (Smartest Non-Reasoning) ⭐", description: "Smartest non-reasoning model" },
+  { value: "gpt-4o", label: "GPT-4o (Fast & Intelligent) ⭐", description: "Fast, intelligent, flexible GPT model" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini (Fast & Affordable) ⭐", description: "Fast, affordable small model for focused tasks" },
+  { value: "gpt-4-turbo", label: "GPT-4 Turbo (Legacy)", description: "An older high-intelligence GPT model" },
+  { value: "gpt-4", label: "GPT-4 (Legacy)", description: "An older high-intelligence GPT model" },
+  
+  // GPT-4o Specialized (Preview)
+  { value: "gpt-4o-audio-preview", label: "GPT-4o Audio (Preview)", description: "GPT-4o model capable of audio input and output" },
+  { value: "gpt-4o-mini-audio-preview", label: "GPT-4o Mini Audio (Preview)", description: "Smaller model capable of audio input and output" },
+  { value: "gpt-4o-realtime-preview", label: "GPT-4o Realtime (Preview)", description: "Model capable of realtime text and audio input and output" },
+  { value: "gpt-4o-mini-realtime-preview", label: "GPT-4o Mini Realtime (Preview)", description: "Smaller realtime model for text and audio" },
+  { value: "gpt-4o-search-preview", label: "GPT-4o Search (Preview)", description: "GPT model for web search in Chat Completion" },
+  { value: "gpt-4o-mini-search-preview", label: "GPT-4o Mini Search (Preview)", description: "Fast, affordable small model for web search" },
+  
+  // Legacy Models
+  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo (Legacy)", description: "Legacy GPT model for cheaper chat and non-chat tasks" },
 ];
 
 export const LLMStep: React.FC<LLMStepProps> = ({
@@ -27,6 +48,10 @@ export const LLMStep: React.FC<LLMStepProps> = ({
   errors,
   onUpdate,
 }) => {
+  const selectedModel = MODEL_OPTIONS.find(
+    (model) => model.value === (config.llm_model || "gpt-4o-mini")
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -44,11 +69,16 @@ export const LLMStep: React.FC<LLMStepProps> = ({
             label="Model"
             value={config.llm_model || "gpt-4o-mini"}
             onChange={(e) => onUpdate({ llm_model: e.target.value })}
-            options={MODEL_OPTIONS}
+            options={MODEL_OPTIONS.map(({ value, label }) => ({ value, label }))}
             error={getFieldError(errors, "llm_model")}
           />
+          {selectedModel?.description && (
+            <p className="mt-1 text-xs text-gray-600 italic">
+              {selectedModel.description}
+            </p>
+          )}
           <p className="mt-1 text-xs text-gray-500">
-            Choose the OpenAI model for generating responses
+            Choose the OpenAI model for generating responses. Models marked with ⭐ are recommended for medical agents.
           </p>
         </div>
 

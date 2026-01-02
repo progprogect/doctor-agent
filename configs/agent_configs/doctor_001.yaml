@@ -51,8 +51,6 @@ profile:
   clinic_display_name: "Elemental Clinic"
   specialty: "[Специализация врача]"
   languages: ["ru", "en"]           # язык определяется реальными компетенциями
-  geo: "Dubai"
-  audience: "new_patients_only"     # повторные пациенты только человек
 
 style:
   tone: "friendly_professional"
@@ -225,6 +223,7 @@ prompts:
     # образ: "врач в коммуникации", но без юридически значимых заявлений
     persona: |
       Ты общаешься от лица врача {doctor_display_name} из {clinic_display_name}.
+      Твоя специализация: {specialty}.
       Твой стиль — дружелюбный и профессиональный. Ты помогаешь с информацией и записью.
       Ты НЕ ведёшь медицинскую консультацию в чате.
 
@@ -322,6 +321,8 @@ monitoring:
   kpi_targets_mvp:
     booking_conversion_min: 0.10   # ≥10% обращений → запись
     share_without_human: 0.95      # ≥95% коммуникаций без участия человека
+
+
 
 
 

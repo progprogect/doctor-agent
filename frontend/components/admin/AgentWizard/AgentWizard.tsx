@@ -8,6 +8,7 @@ import { WizardProgress } from "./WizardProgress";
 import { WizardNavigation } from "./WizardNavigation";
 import { BasicInfoStep } from "./steps/BasicInfoStep";
 import { StyleStep } from "./steps/StyleStep";
+import { ExamplesStep } from "./steps/ExamplesStep";
 import { RAGStep } from "./steps/RAGStep";
 import { EscalationStep } from "./steps/EscalationStep";
 import { LLMStep } from "./steps/LLMStep";
@@ -16,10 +17,11 @@ import { ReviewStep } from "./steps/ReviewStep";
 const WIZARD_STEPS = [
   { number: 1, title: "Basic Info" },
   { number: 2, title: "Style" },
-  { number: 3, title: "RAG Documents" },
-  { number: 4, title: "Escalation" },
-  { number: 5, title: "LLM Settings" },
-  { number: 6, title: "Review" },
+  { number: 3, title: "Examples" },
+  { number: 4, title: "RAG Documents" },
+  { number: 5, title: "Escalation" },
+  { number: 6, title: "LLM Settings" },
+  { number: 7, title: "Review" },
 ];
 
 interface AgentWizardProps {
@@ -96,7 +98,7 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
         );
       case 3:
         return (
-          <RAGStep
+          <ExamplesStep
             config={state.config}
             errors={state.errors}
             onUpdate={updateConfig}
@@ -104,7 +106,7 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
         );
       case 4:
         return (
-          <EscalationStep
+          <RAGStep
             config={state.config}
             errors={state.errors}
             onUpdate={updateConfig}
@@ -112,13 +114,21 @@ export const AgentWizard: React.FC<AgentWizardProps> = ({
         );
       case 5:
         return (
-          <LLMStep
+          <EscalationStep
             config={state.config}
             errors={state.errors}
             onUpdate={updateConfig}
           />
         );
       case 6:
+        return (
+          <LLMStep
+            config={state.config}
+            errors={state.errors}
+            onUpdate={updateConfig}
+          />
+        );
+      case 7:
         return (
           <ReviewStep
             config={state.config}

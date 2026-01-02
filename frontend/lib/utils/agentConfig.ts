@@ -1,5 +1,37 @@
 /** Utilities for working with agent configuration. */
 
+export interface ConversationExample {
+  id: string;
+  user_message: string; // English only
+  agent_response: string; // English only
+  category?: "booking" | "info" | "hours" | "custom";
+}
+
+// Standard examples (pre-filled)
+export const DEFAULT_EXAMPLES: ConversationExample[] = [
+  {
+    id: "example_booking",
+    category: "booking",
+    user_message: "How can I book an appointment?",
+    agent_response:
+      "Of course! I'd be happy to help you schedule an appointment. To proceed, could you please provide your phone number? Our administrator will contact you shortly to confirm the details and find a convenient time that works for you.",
+  },
+  {
+    id: "example_services",
+    category: "info",
+    user_message: "What services do you provide?",
+    agent_response:
+      "We offer a comprehensive range of medical services tailored to meet your healthcare needs. Our clinic specializes in [specialty], and we provide consultations, diagnostic services, and follow-up care. Would you like more details about any specific service, or would you prefer to schedule a consultation to discuss your needs?",
+  },
+  {
+    id: "example_hours",
+    category: "hours",
+    user_message: "What are your working hours?",
+    agent_response:
+      "Our clinic is open Monday through Friday from 9:00 AM to 6:00 PM. We're closed on weekends. If you need to reach us outside of these hours, please leave your contact information and we'll get back to you as soon as possible. Would you like to schedule an appointment?",
+  },
+];
+
 export interface AgentConfigFormData {
   // Basic Info
   agent_id: string;
@@ -35,7 +67,10 @@ export interface AgentConfigFormData {
   llm_temperature?: number;
   llm_max_tokens?: number;
 
-  // System Prompt (Step 6)
+  // Examples (Step 3)
+  examples?: ConversationExample[];
+
+  // System Prompt (Step 7)
   system_persona?: string; // Editable system persona prompt
 }
 
@@ -54,6 +89,8 @@ export function generateDefaultConfig(): Partial<AgentConfigFormData> {
     depth_level: 5,
     message_length: "short_to_medium",
     persuasion: "soft",
+    // Examples defaults
+    examples: [...DEFAULT_EXAMPLES],
     // Escalation defaults
     medical_question_policy: "handoff_or_book",
     urgent_case_policy: "advise_emergency_and_handoff",
@@ -107,6 +144,17 @@ export function agentConfigToFormData(
     // Languages
     languages: agentConfig.profile?.languages || ["ru", "en"],
 
+    // Examples
+    examples:
+      agentConfig.prompts?.examples && agentConfig.prompts.examples.length > 0
+        ? agentConfig.prompts.examples.map((ex: any, index: number) => ({
+            id: ex.id || `example_${index}_${Date.now()}`,
+            user_message: ex.user_message || "",
+            agent_response: ex.agent_response || "",
+            category: ex.category,
+          }))
+        : DEFAULT_EXAMPLES,
+
     // System prompt
     system_persona: agentConfig.prompts?.system?.persona,
 
@@ -153,7 +201,8 @@ export function formDataToAgentConfig(
     },
     prompts: {
       system: {
-        persona: formData.system_persona || `Ты общаешься от лица врача ${formData.doctor_display_name} из ${formData.clinic_display_name}.
+        persona: formData.system_persona || `Ты общаешься от лица врача {doctor_display_name} из {clinic_display_name}.
+Твоя специализация: {specialty}.
 Твой стиль — дружелюбный и профессиональный. Ты помогаешь с информацией и записью.
 Ты НЕ ведёшь медицинскую консультацию в чате.`,
         hard_rules: `Запрещено: диагнозы, лечение, рекомендации препаратов, интерпретация анализов.
@@ -165,6 +214,15 @@ export function formDataToAgentConfig(
         goal: `Главная цель — быстро и вежливо помочь, квалифицировать запрос и привести к записи без давления.
 Если специализация не подходит — предложи другого врача/направление и запись.`,
       },
+      examples:
+        formData.examples && formData.examples.length > 0
+          ? formData.examples.map((ex, index) => ({
+              id: ex.id || `example_${index}_${Date.now()}`,
+              user_message: ex.user_message,
+              agent_response: ex.agent_response,
+              category: ex.category,
+            }))
+          : [],
     },
     rag: {
       enabled: formData.rag_enabled,

@@ -40,8 +40,6 @@ class ProfileConfig(BaseModel):
     clinic_display_name: str
     specialty: str
     languages: list[str] = Field(default_factory=lambda: ["ru", "en"])
-    geo: str = Field(default="Dubai")
-    audience: str = Field(default="new_patients_only")
 
 
 class StyleConfig(BaseModel):
@@ -203,11 +201,26 @@ class ModerationConfig(BaseModel):
         return v
 
 
+class ConversationExample(BaseModel):
+    """Example conversation for few-shot learning."""
+
+    id: str
+    user_message: str = Field(..., min_length=1, max_length=500)
+    agent_response: str = Field(..., min_length=1, max_length=2000)
+    category: Optional[str] = Field(
+        None, description="Example category: booking, info, hours, custom"
+    )
+
+
 class PromptsConfig(BaseModel):
     """Prompts configuration."""
 
     system: dict[str, str] = Field(default_factory=dict)
     templates: dict[str, str] = Field(default_factory=dict)
+    examples: list[ConversationExample] = Field(
+        default_factory=list,
+        description="Few-shot examples for style guidance (English)",
+    )
 
 
 class RAGConfig(BaseModel):
@@ -274,6 +287,11 @@ class AgentConfig(BaseModel):
                 if not isinstance(threshold, (int, float)) or not 0.0 <= threshold <= 1.0:
                     raise ValueError("RAG score_threshold must be between 0.0 and 1.0")
 
+        # Validate examples configuration
+        if self.prompts.examples:
+            if len(self.prompts.examples) > 7:
+                raise ValueError("Maximum 7 examples allowed (3 standard + 4 custom)")
+
         return self
 
     @classmethod
@@ -307,7 +325,14 @@ class AgentConfig(BaseModel):
             elif key == "moderation" and isinstance(value, dict):
                 config_data[key] = ModerationConfig(**value)
             elif key == "prompts" and isinstance(value, dict):
-                config_data[key] = PromptsConfig(**value)
+                # Handle examples conversion if present
+                prompts_data = value.copy()
+                if "examples" in prompts_data and isinstance(prompts_data["examples"], list):
+                    prompts_data["examples"] = [
+                        ConversationExample(**ex) if isinstance(ex, dict) else ex
+                        for ex in prompts_data["examples"]
+                    ]
+                config_data[key] = PromptsConfig(**prompts_data)
             elif key == "rag" and isinstance(value, dict):
                 config_data[key] = RAGConfig(**value)
             elif key == "monitoring" and isinstance(value, dict):
