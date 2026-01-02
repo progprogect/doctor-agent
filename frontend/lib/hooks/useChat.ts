@@ -58,7 +58,36 @@ export function useChat(conversationId: string | null) {
           content: message.content,
           timestamp: message.timestamp || new Date().toISOString(),
         };
-        setMessages((prev) => [...prev, newMessage]);
+        
+        // If this is a user message with a real message_id, replace the optimistic one
+        if (message.role === "user" && message.message_id) {
+          setMessages((prev) => {
+            // Remove any temporary user messages with the same content
+            const filtered = prev.filter(
+              (m) =>
+                !(
+                  m.role === "user" &&
+                  m.content === message.content &&
+                  m.message_id.startsWith("temp-")
+                )
+            );
+            // Check if message already exists (avoid duplicates)
+            const exists = filtered.some((m) => m.message_id === message.message_id);
+            if (!exists) {
+              return [...filtered, newMessage];
+            }
+            return filtered;
+          });
+        } else {
+          // For agent messages, check for duplicates by message_id
+          setMessages((prev) => {
+            const exists = prev.some((m) => m.message_id === message.message_id);
+            if (!exists) {
+              return [...prev, newMessage];
+            }
+            return prev;
+          });
+        }
       } else if (message.type === "typing") {
         setIsTyping(true);
         setTimeout(() => setIsTyping(false), 3000);
