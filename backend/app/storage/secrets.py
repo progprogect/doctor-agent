@@ -50,23 +50,23 @@ class SecretsManager:
         try:
             response = self.client.get_secret_value(SecretId=secret_name)
             secret_value = response["SecretString"]
-            logger.debug(f"[SECRETS] Raw secret_value from AWS (first 50 chars): {repr(secret_value[:50]) if len(secret_value) > 50 else repr(secret_value)}")
+            logger.info(f"[SECRETS] Raw secret_value from AWS (first 50 chars): {repr(secret_value[:50]) if len(secret_value) > 50 else repr(secret_value)}")
 
             # Try to parse as JSON
             try:
                 secret_data = json.loads(secret_value)
-                logger.debug(f"[SECRETS] Parsed as JSON, type: {type(secret_data)}, keys: {list(secret_data.keys()) if isinstance(secret_data, dict) else 'N/A'}")
+                logger.info(f"[SECRETS] Parsed as JSON, type: {type(secret_data)}, keys: {list(secret_data.keys()) if isinstance(secret_data, dict) else 'N/A'}")
                 # If it's a dict, extract the value by key
                 if isinstance(secret_data, dict):
                     # Common pattern: {"api_key": "value"} or {"OPENAI_API_KEY": "value"}
                     for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
                         if key in secret_data:
                             extracted_value = secret_data[key]
-                            logger.debug(f"[SECRETS] Found key '{key}', extracted_value type: {type(extracted_value)}, value (first 20 chars): {repr(str(extracted_value)[:20]) if len(str(extracted_value)) > 20 else repr(extracted_value)}")
+                            logger.info(f"[SECRETS] Found key '{key}', extracted_value type: {type(extracted_value)}, value (first 20 chars): {repr(str(extracted_value)[:20]) if len(str(extracted_value)) > 20 else repr(extracted_value)}")
                             # Ensure extracted value is a string
                             if isinstance(extracted_value, str):
                                 secret_value = extracted_value
-                                logger.debug(f"[SECRETS] Assigned extracted_value to secret_value: {repr(secret_value[:20])}...")
+                                logger.info(f"[SECRETS] Assigned extracted_value to secret_value: {repr(secret_value[:20])}...")
                             elif isinstance(extracted_value, dict):
                                 # If it's still a dict, something is wrong - try to find string value
                                 for v in extracted_value.values():
@@ -81,7 +81,7 @@ class SecretsManager:
 
             # Clean up whitespace
             secret_value = secret_value.strip().strip('"').strip("'")
-            logger.debug(f"[SECRETS] After cleanup, secret_value (first 20 chars): {repr(secret_value[:20]) if len(secret_value) > 20 else repr(secret_value)}")
+            logger.info(f"[SECRETS] After cleanup, secret_value (first 20 chars): {repr(secret_value[:20]) if len(secret_value) > 20 else repr(secret_value)}")
             
             # CRITICAL: Validate that we never cache a JSON string
             # If secret_value still looks like JSON after extraction, something went wrong
@@ -95,7 +95,7 @@ class SecretsManager:
                         for v in parsed.values():
                             if isinstance(v, str) and v.strip().startswith('sk-'):
                                 secret_value = v.strip()
-                                logger.debug(f"[SECRETS] Fallback extraction successful: {repr(secret_value[:20])}...")
+                                logger.info(f"[SECRETS] Fallback extraction successful: {repr(secret_value[:20])}...")
                                 break
                         # If still JSON, raise error - we should never cache this
                         if secret_value.startswith('{'):
@@ -114,12 +114,12 @@ class SecretsManager:
 
             # Final cleanup
             secret_value = secret_value.strip().strip('"').strip("'")
-            logger.debug(f"[SECRETS] Final secret_value (first 20 chars): {repr(secret_value[:20]) if len(secret_value) > 20 else repr(secret_value)}, starts_with_sk: {secret_value.startswith('sk-')}, starts_with_brace: {secret_value.startswith('{')}")
+            logger.info(f"[SECRETS] Final secret_value (first 20 chars): {repr(secret_value[:20]) if len(secret_value) > 20 else repr(secret_value)}, starts_with_sk: {secret_value.startswith('sk-')}, starts_with_brace: {secret_value.startswith('{')}")
 
             # Only cache if it's a clean string (not JSON)
             if use_cache and not (secret_value.startswith('{') and secret_value.endswith('}')):
                 self._cache[secret_name] = secret_value
-                logger.debug(f"[SECRETS] Cached secret_value for {secret_name}")
+                logger.info(f"[SECRETS] Cached secret_value for {secret_name}")
             else:
                 logger.warning(f"[SECRETS] NOT caching secret_value for {secret_name} (looks like JSON: {secret_value.startswith('{')})")
 
@@ -133,17 +133,17 @@ class SecretsManager:
 
     async def get_openai_api_key(self) -> str:
         """Get OpenAI API key from Secrets Manager."""
-        logger.debug(f"[SECRETS] get_openai_api_key() called, clearing cache...")
+        logger.info(f"[SECRETS] get_openai_api_key() called, clearing cache...")
         # Clear cache to ensure fresh retrieval
         self.clear_cache(self.settings.secrets_manager_openai_key_name)
         
         # Get secret - get_secret() already handles JSON extraction
         api_key = await self.get_secret(self.settings.secrets_manager_openai_key_name)
-        logger.debug(f"[SECRETS] get_openai_api_key() received from get_secret() (first 20 chars): {repr(api_key[:20]) if len(api_key) > 20 else repr(api_key)}")
+        logger.info(f"[SECRETS] get_openai_api_key() received from get_secret() (first 20 chars): {repr(api_key[:20]) if len(api_key) > 20 else repr(api_key)}")
         
         # Final cleanup
         api_key = api_key.strip().strip('"').strip("'")
-        logger.debug(f"[SECRETS] get_openai_api_key() after cleanup (first 20 chars): {repr(api_key[:20]) if len(api_key) > 20 else repr(api_key)}, starts_with_sk: {api_key.startswith('sk-')}")
+        logger.info(f"[SECRETS] get_openai_api_key() after cleanup (first 20 chars): {repr(api_key[:20]) if len(api_key) > 20 else repr(api_key)}, starts_with_sk: {api_key.startswith('sk-')}")
         
         # Validate that it looks like an API key (starts with sk-)
         if not api_key.startswith('sk-'):
@@ -153,7 +153,7 @@ class SecretsManager:
                 f"Got: {api_key[:50]}..." if len(api_key) > 50 else f"Got: {api_key}"
             )
         
-        logger.debug(f"[SECRETS] get_openai_api_key() returning valid key (first 10 chars): {repr(api_key[:10])}...")
+        logger.info(f"[SECRETS] get_openai_api_key() returning valid key (first 10 chars): {repr(api_key[:10])}...")
         return api_key
 
     def clear_cache(self, secret_name: Optional[str] = None) -> None:
