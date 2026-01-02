@@ -14,6 +14,7 @@ from tenacity import (
 
 from app.config import Settings, get_settings
 from app.storage.secrets import SecretsManager, get_secrets_manager
+from app.utils.model_params import requires_max_completion_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -107,11 +108,19 @@ class OpenAIClientWrapper:
         **kwargs,
     ):
         """Create chat completion with retry."""
+        model_name = model or self.settings.openai_model
+        max_tokens_value = max_tokens or self.settings.openai_max_tokens
+        
+        # Use correct parameter based on model
+        if requires_max_completion_tokens(model_name):
+            kwargs["max_completion_tokens"] = max_tokens_value
+        else:
+            kwargs["max_tokens"] = max_tokens_value
+        
         return await self.async_client.chat.completions.create(
-            model=model or self.settings.openai_model,
+            model=model_name,
             messages=messages,
             temperature=temperature or self.settings.openai_temperature,
-            max_tokens=max_tokens or self.settings.openai_max_tokens,
             **kwargs,
         )
 
