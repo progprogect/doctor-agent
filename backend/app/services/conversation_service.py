@@ -27,17 +27,19 @@ class ConversationService:
         if not conversation:
             raise ValueError(f"Conversation {conversation_id} not found")
 
-        # Get conversation history
+        # Get conversation history (last 50 messages for context)
+        # Note: list_messages returns messages in reverse order (newest first) by default
         history_messages = await self.dynamodb.list_messages(
             conversation_id=conversation_id,
-            limit=10,
+            limit=50,
         )
+        # Reverse to get chronological order (oldest first) for LLM context
         conversation_history = [
             {
                 "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
                 "content": msg.content,
             }
-            for msg in history_messages
+            for msg in reversed(history_messages)  # Reverse to chronological order
         ]
 
         # Process through agent service
