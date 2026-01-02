@@ -60,9 +60,14 @@ class SecretsManager:
 
     async def get_openai_api_key(self) -> str:
         """Get OpenAI API key from Secrets Manager."""
+        # Clear cache to ensure fresh retrieval
+        self.clear_cache(self.settings.secrets_manager_openai_key_name)
+        
         api_key = await self.get_secret(self.settings.secrets_manager_openai_key_name)
+        
         # Clean up the API key - remove any extra whitespace, quotes, or JSON artifacts
         api_key = api_key.strip().strip('"').strip("'")
+        
         # Remove JSON-like artifacts if present (e.g., {"OPENAI_API_KEY": "value"} -> value)
         if api_key.startswith('{') and api_key.endswith('}'):
             try:
@@ -74,7 +79,15 @@ class SecretsManager:
                             break
             except json.JSONDecodeError:
                 pass
-        return api_key.strip().strip('"').strip("'")
+        
+        # Final cleanup
+        api_key = api_key.strip().strip('"').strip("'")
+        
+        # Validate that it looks like an API key (starts with sk-)
+        if not api_key.startswith('sk-'):
+            raise ValueError(f"Invalid API key format: key does not start with 'sk-'")
+        
+        return api_key
 
     def clear_cache(self, secret_name: Optional[str] = None) -> None:
         """Clear cached secrets."""
