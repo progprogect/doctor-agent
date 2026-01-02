@@ -93,6 +93,9 @@ Return a structured response with:
                     "context": context_str or "No previous context",
                 }
             )
+            # LLMChain with PydanticOutputParser returns dict, convert to EscalationDecision
+            if isinstance(result, dict):
+                return EscalationDecision(**result)
             return result
         except Exception as e:
             # On error, default to no escalation
