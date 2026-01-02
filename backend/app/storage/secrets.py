@@ -57,26 +57,69 @@ class SecretsManager:
                     for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
                         if key in secret_data:
                             secret_value = secret_data[key]
+                            # If the extracted value is still a dict or looks like JSON, continue processing
+                            if isinstance(secret_value, dict):
+                                # Convert dict back to string for further processing
+                                secret_value = json.dumps(secret_value)
                             break
             except json.JSONDecodeError:
                 # Not JSON, use as-is
                 pass
 
             # Clean up the secret value - remove any extra whitespace, quotes, or JSON artifacts
+            # Keep processing until we get a clean string that doesn't look like JSON
+            max_iterations = 5
+            iteration = 0
+            while iteration < max_iterations:
+                secret_value = secret_value.strip().strip('"').strip("'")
+                
+                # If it still looks like JSON (starts with {), try parsing again
+                if secret_value.startswith('{') and secret_value.endswith('}'):
+                    try:
+                        parsed = json.loads(secret_value)
+                        if isinstance(parsed, dict):
+                            found = False
+                            for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
+                                if key in parsed:
+                                    secret_value = parsed[key]
+                                    # If extracted value is still a dict, convert to string
+                                    if isinstance(secret_value, dict):
+                                        secret_value = json.dumps(secret_value)
+                                    found = True
+                                    break
+                            if not found:
+                                # No matching key found, break to avoid infinite loop
+                                break
+                        else:
+                            # Not a dict, break
+                            break
+                    except json.JSONDecodeError:
+                        # Can't parse, break
+                        break
+                else:
+                    # Doesn't look like JSON, we're done
+                    break
+                
+                iteration += 1
+
+            # Final cleanup
             secret_value = secret_value.strip().strip('"').strip("'")
-            # If it still looks like JSON (starts with {), try parsing again (double-encoded case)
+            
+            # Validate: if it still looks like JSON after all processing, something is wrong
             if secret_value.startswith('{') and secret_value.endswith('}'):
+                # Last attempt: try to extract any string value from the JSON
                 try:
                     parsed = json.loads(secret_value)
                     if isinstance(parsed, dict):
-                        for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
-                            if key in parsed:
-                                secret_value = parsed[key]
+                        # Get the first string value we find
+                        for v in parsed.values():
+                            if isinstance(v, str) and v.startswith('sk-'):
+                                secret_value = v
                                 break
-                except json.JSONDecodeError:
+                except:
                     pass
 
-            # Final cleanup
+            # Final cleanup again
             secret_value = secret_value.strip().strip('"').strip("'")
 
             if use_cache:
