@@ -193,13 +193,25 @@ the user uses (as specified in your language capabilities).
         # Note: Consider token limits - 50 messages ≈ 2000-3000 tokens
         chat_history = []
         if conversation_history:
+            # conversation_history is already in chronological order (oldest first)
+            # Take last 50 messages (most recent)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Processing conversation_history: {len(conversation_history)} messages")
             for msg in conversation_history[-50:]:  # Last 50 messages
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
-                if role == "user":
+                # Normalize role to lowercase for comparison
+                role_lower = role.lower() if isinstance(role, str) else str(role).lower()
+                if role_lower == "user":
                     chat_history.append(("human", content))
-                elif role == "agent":
+                    logger.debug(f"Added USER message to chat_history: {content[:50]}...")
+                elif role_lower == "agent":
                     chat_history.append(("ai", content))
+                    logger.debug(f"Added AGENT message to chat_history: {content[:50]}...")
+                else:
+                    logger.warning(f"Skipping message with unknown role: {role}")
+            logger.info(f"Final chat_history length: {len(chat_history)} messages")
 
         try:
             result = await executor.ainvoke(

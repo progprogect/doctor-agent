@@ -169,18 +169,27 @@ async def send_message(
 
     # Get conversation history (last 50 messages for context)
     # Note: list_messages returns messages in reverse order (newest first) by default
+    # We need chronological order (oldest first) for LLM context
     history_messages = await deps.dynamodb.list_messages(
         conversation_id=conversation_id,
         limit=50,
+        reverse=True,  # Get newest first (default)
     )
     # Reverse to get chronological order (oldest first) for LLM context
+    # After reverse: [oldest_message, ..., newest_message]
     conversation_history = [
         {
             "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
             "content": msg.content,
         }
-        for msg in reversed(history_messages)  # Reverse to chronological order
+        for msg in reversed(history_messages)  # Reverse to chronological order (oldest first)
     ]
+    # Log for debugging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Conversation history for {conversation_id}: {len(conversation_history)} messages")
+    for i, msg in enumerate(conversation_history):
+        logger.debug(f"History[{i}]: role={msg['role']}, content_preview={msg['content'][:50]}...")
 
     # Process message through agent service
     agent_service = create_agent_service(agent_config, deps.dynamodb)

@@ -224,3 +224,4 @@ def get_opensearch_client() -> OpenSearchClient:
 
 
 
+
