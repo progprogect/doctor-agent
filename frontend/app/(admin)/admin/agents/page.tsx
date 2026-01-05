@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
+import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { agentConfigToFormData } from "@/lib/utils/agentConfig";
 import type { Agent } from "@/lib/types/agent";
 
@@ -15,6 +16,9 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadAgents();
@@ -90,6 +94,45 @@ export default function AgentsPage() {
     } catch (err) {
       console.error("Failed to load agent for editing:", err);
       setError("Failed to load agent for editing. Please try again.");
+    }
+  };
+
+  const handleDeleteAgent = (agent: Agent) => {
+    setAgentToDelete(agent);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteAgent = async () => {
+    if (!agentToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      setError(null);
+      
+      await api.deleteAgent(agentToDelete.agent_id);
+      
+      // Remove agent from list
+      setAgents(agents.filter((a) => a.agent_id !== agentToDelete.agent_id));
+      
+      // Close modal
+      setIsDeleteModalOpen(false);
+      setAgentToDelete(null);
+    } catch (err) {
+      console.error("Failed to delete agent:", err);
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Failed to delete agent. Please try again.");
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const closeDeleteModal = () => {
+    if (!isDeleting) {
+      setIsDeleteModalOpen(false);
+      setAgentToDelete(null);
     }
   };
 
@@ -185,7 +228,11 @@ export default function AgentsPage() {
                     >
                       Edit
                     </button>
-                    <button className="text-red-600 hover:text-red-700 transition-colors duration-200 cursor-pointer">
+                    <button
+                      onClick={() => handleDeleteAgent(agent)}
+                      className="text-red-600 hover:text-red-700 transition-colors duration-200 cursor-pointer"
+                      title="Delete this agent"
+                    >
                       Delete
                     </button>
                   </td>
@@ -195,6 +242,23 @@ export default function AgentsPage() {
           </table>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteAgent}
+        title="Delete Agent"
+        message={
+          agentToDelete
+            ? `Are you sure you want to delete agent "${agentToDelete.config.profile?.doctor_display_name || agentToDelete.agent_id}"?\n\nThis action will deactivate the agent. This action cannot be undone.`
+            : ""
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }
