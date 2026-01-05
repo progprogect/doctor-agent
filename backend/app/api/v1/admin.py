@@ -1,5 +1,7 @@
 """Admin API endpoints."""
 
+import uuid
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -9,8 +11,10 @@ from pydantic import BaseModel, Field
 from app.api.auth import require_admin
 from app.api.exceptions import ConversationNotFoundError
 from app.api.schemas import ConversationIDValidator
+from app.api.websocket import connection_manager
 from app.dependencies import CommonDependencies
 from app.models.conversation import ConversationStatus
+from app.models.message import Message, MessageRole
 
 router = APIRouter()
 
@@ -170,6 +174,110 @@ async def get_audit_logs(
         limit=limit,
     )
     return logs
+
+
+class SendAdminMessageRequest(BaseModel):
+    """Request to send admin message."""
+
+    admin_id: str = Field(..., description="Admin user ID", min_length=1)
+    content: str = Field(..., description="Message content", min_length=1, max_length=10000)
+
+
+class SendAdminMessageResponse(BaseModel):
+    """Response for admin message."""
+
+    message_id: str
+    role: str
+    content: str
+    timestamp: str
+
+
+@router.post(
+    "/conversations/{conversation_id}/messages",
+    response_model=SendAdminMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def send_admin_message(
+    conversation_id: str,
+    request: SendAdminMessageRequest,
+    deps: CommonDependencies = Depends(),
+    _admin: str = require_admin(),
+):
+    """Send a message as admin in a conversation."""
+    # Validate UUID format
+    try:
+        UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid conversation ID format",
+        )
+
+    conversation = await deps.dynamodb.get_conversation(conversation_id)
+    if not conversation:
+        raise ConversationNotFoundError(conversation_id)
+
+    # Check conversation status - admin can only send messages when human is handling
+    status_value = (
+        conversation.status.value
+        if hasattr(conversation.status, "value")
+        else str(conversation.status)
+    )
+    if status_value not in [
+        ConversationStatus.NEEDS_HUMAN.value,
+        ConversationStatus.HUMAN_ACTIVE.value,
+    ]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin can only send messages when conversation status is NEEDS_HUMAN or HUMAN_ACTIVE",
+        )
+
+    # Create admin message
+    message_id = str(uuid.uuid4())
+    admin_message = Message(
+        message_id=message_id,
+        conversation_id=conversation_id,
+        agent_id=conversation.agent_id,
+        role=MessageRole.ADMIN,
+        content=request.content,
+        timestamp=datetime.utcnow(),
+    )
+
+    await deps.dynamodb.create_message(admin_message)
+
+    # Send via WebSocket if connected
+    await connection_manager.send_message(
+        conversation_id,
+        {
+            "type": "message",
+            "message_id": message_id,
+            "role": "admin",
+            "content": request.content,
+            "timestamp": admin_message.timestamp.isoformat(),
+        },
+    )
+
+    # Create audit log
+    await deps.dynamodb.create_audit_log(
+        admin_id=request.admin_id,
+        action="send_message",
+        resource_type="conversation",
+        resource_id=conversation_id,
+        metadata={"message_id": message_id},
+    )
+
+    # Handle both enum and string role (from DynamoDB)
+    role_value = (
+        admin_message.role.value
+        if hasattr(admin_message.role, "value")
+        else str(admin_message.role)
+    )
+    return SendAdminMessageResponse(
+        message_id=message_id,
+        role=role_value,
+        content=admin_message.content,
+        timestamp=admin_message.timestamp.isoformat(),
+    )
 
 
 @router.get("/stats")

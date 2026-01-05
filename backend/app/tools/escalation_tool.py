@@ -4,6 +4,7 @@ from typing import Optional
 
 from pydantic import Field
 
+from app.models.agent_config import AgentConfig
 from app.tools.base import BaseAgentTool, ToolInput
 from app.services.escalation_service import EscalationService
 
@@ -23,18 +24,22 @@ class EscalationTool(BaseAgentTool):
     name: str = "escalation_detector"
     description: str = (
         "Detects if a user message requires escalation to a human admin. "
-        "Use this when you need to determine if the conversation should be handed off."
+        "Use this when you need to determine if the conversation should be handed off. "
+        "Always use this tool when you detect urgent situations, medical questions requiring diagnosis, "
+        "booking requests, or when user indicates they are a returning patient."
     )
 
     def __init__(
         self,
         escalation_service: EscalationService,
         agent_id: Optional[str] = None,
+        agent_config: Optional[AgentConfig] = None,
     ):
         """Initialize escalation tool."""
         super().__init__(agent_id=agent_id)
-        # Use object.__setattr__ to bypass Pydantic validation for escalation_service
+        # Use object.__setattr__ to bypass Pydantic validation
         object.__setattr__(self, 'escalation_service', escalation_service)
+        object.__setattr__(self, 'agent_config', agent_config)
 
     def _run(self, message: str, context: Optional[dict] = None) -> str:
         """Sync run (not used, but required by BaseTool)."""
@@ -48,6 +53,7 @@ class EscalationTool(BaseAgentTool):
             message=message,
             conversation_context=context,
             agent_id=self.agent_id,
+            agent_config=self.agent_config,
         )
 
         if decision.needs_escalation:

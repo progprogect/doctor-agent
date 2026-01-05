@@ -8,6 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 
 from app.config import get_settings
+from app.models.agent_config import AgentConfig
 from app.models.escalation import EscalationDecision, EscalationType
 from app.services.llm_factory import LLMFactory
 
@@ -15,14 +16,114 @@ from app.services.llm_factory import LLMFactory
 class EscalationChain:
     """LangChain chain for detecting escalation needs."""
 
-    def __init__(self, llm_factory: LLMFactory):
+    def __init__(self, llm_factory: LLMFactory, agent_config: Optional[AgentConfig] = None):
         """Initialize escalation chain."""
         self.llm_factory = llm_factory
-        self._chain: Optional[LLMChain] = None
+        self.agent_config = agent_config
+        self._chains: dict[str, LLMChain] = {}  # Cache per agent_id
 
-    async def _get_chain(self, agent_id: Optional[str] = None) -> LLMChain:
-        """Get or create escalation chain."""
-        if self._chain is None:
+    def _build_system_prompt(self, agent_config: Optional[AgentConfig] = None) -> str:
+        """Build system prompt from agent config instructions or use default."""
+        config = agent_config or self.agent_config
+
+        # Base escalation types
+        base_types = """Escalation types:
+- urgent: Emergency situations, severe symptoms, life-threatening conditions
+- medical: Medical questions requiring diagnosis, treatment advice, or interpretation
+- booking: User wants to book an appointment
+- repeat_patient: User indicates they are a returning/previous patient
+- none: No escalation needed, AI can handle"""
+
+        # If no config or no instructions, use default prompt
+        if not config or not config.escalation.instructions:
+            return f"""You are an escalation detection system for a medical AI agent.
+Your task is to analyze user messages and determine if they require human intervention.
+
+{base_types}
+
+Return a structured response with:
+- needs_escalation: boolean
+- escalation_type: one of the types above
+- confidence: float between 0 and 1
+- reason: brief explanation
+- suggested_action: what should happen next"""
+
+        # Build prompt from instructions
+        instructions_section = []
+        escalation_config = config.escalation
+
+        # Add instructions for each escalation type
+        for esc_type, instruction in escalation_config.instructions.items():
+            examples_text = ""
+            if instruction.examples:
+                examples_list = "\n".join(f"  - {ex}" for ex in instruction.examples)
+                examples_text = f"\nExamples:\n{examples_list}"
+
+            instructions_section.append(
+                f"- {esc_type}: {instruction.description}{examples_text}\n"
+                f"  Guidance: {instruction.guidance}"
+            )
+
+        # Add policies if available (use policies dict or fallback to individual fields)
+        policies_section = ""
+        policies_dict = {}
+        
+        # Use policies dict if available, otherwise fallback to individual policy fields (backward compatibility)
+        if escalation_config.policies:
+            policies_dict = dict(escalation_config.policies)
+        else:
+            # Fallback to individual policy fields
+            if escalation_config.medical_question_policy:
+                policies_dict["medical_question"] = escalation_config.medical_question_policy
+            if escalation_config.urgent_case_policy:
+                policies_dict["urgent_case"] = escalation_config.urgent_case_policy
+            if escalation_config.repeat_patient_policy:
+                policies_dict["repeat_patient"] = escalation_config.repeat_patient_policy
+            if escalation_config.pre_procedure_policy:
+                policies_dict["pre_procedure"] = escalation_config.pre_procedure_policy
+        
+        if policies_dict:
+            policies_list = "\n".join(
+                f"- {k}: {v}" for k, v in policies_dict.items()
+            )
+            policies_section = f"\n\nEscalation Policies:\n{policies_list}"
+
+        # Add trigger keywords as hints
+        triggers_section = ""
+        if escalation_config.triggers:
+            triggers_list = []
+            for trigger_type, keywords in escalation_config.triggers.items():
+                if isinstance(keywords, list) and keywords:
+                    keywords_str = ", ".join(keywords[:10])  # Limit to 10 keywords
+                    triggers_list.append(f"- {trigger_type}: {keywords_str}")
+            if triggers_list:
+                triggers_section = f"\n\nKeyword Hints (examples, not exhaustive):\n" + "\n".join(triggers_list)
+
+        # Build instructions text
+        instructions_text = ""
+        if instructions_section:
+            instructions_text = f"\n\nEscalation Detection Instructions:\n{chr(10).join(instructions_section)}"
+        
+        return f"""You are an escalation detection system for a medical AI agent.
+Your task is to analyze user messages and determine if they require human intervention.
+
+{base_types}{instructions_text}{policies_section}{triggers_section}
+
+Return a structured response with:
+- needs_escalation: boolean
+- escalation_type: one of the types above
+- confidence: float between 0 and 1
+- reason: brief explanation
+- suggested_action: what should happen next"""
+
+    async def _get_chain(
+        self, agent_id: Optional[str] = None, agent_config: Optional[AgentConfig] = None
+    ) -> LLMChain:
+        """Get or create escalation chain (cached per agent_id)."""
+        cache_key = agent_id or "default"
+        config = agent_config or self.agent_config
+
+        if cache_key not in self._chains:
             client = await self.llm_factory.get_client(agent_id)
             settings = get_settings()
             llm = ChatOpenAI(
@@ -32,28 +133,13 @@ class EscalationChain:
                 timeout=settings.openai_timeout,
             )
 
+            # Build system prompt from config
+            system_prompt = self._build_system_prompt(config)
+
             # Create prompt template
             prompt_template = ChatPromptTemplate.from_messages(
                 [
-                    (
-                        "system",
-                        """You are an escalation detection system for a medical AI agent.
-Your task is to analyze user messages and determine if they require human intervention.
-
-Escalation types:
-- urgent: Emergency situations, severe symptoms, life-threatening conditions
-- medical: Medical questions requiring diagnosis, treatment advice, or interpretation
-- booking: User wants to book an appointment
-- repeat_patient: User indicates they are a returning/previous patient
-- none: No escalation needed, AI can handle
-
-Return a structured response with:
-- needs_escalation: boolean
-- escalation_type: one of the types above
-- confidence: float between 0 and 1
-- reason: brief explanation
-- suggested_action: what should happen next""",
-                    ),
+                    ("system", system_prompt),
                     ("human", "User message: {message}\n\nConversation context: {context}"),
                 ]
             )
@@ -62,22 +148,23 @@ Return a structured response with:
             output_parser = PydanticOutputParser(pydantic_object=EscalationDecision)
 
             # Create chain
-            self._chain = LLMChain(
+            self._chains[cache_key] = LLMChain(
                 llm=llm,
                 prompt=prompt_template,
                 output_parser=output_parser,
             )
 
-        return self._chain
+        return self._chains[cache_key]
 
     async def detect(
         self,
         message: str,
         context: Optional[dict] = None,
         agent_id: Optional[str] = None,
+        agent_config: Optional[AgentConfig] = None,
     ) -> EscalationDecision:
         """Detect if escalation is needed."""
-        chain = await self._get_chain(agent_id)
+        chain = await self._get_chain(agent_id, agent_config)
 
         # Prepare context string
         context_str = ""

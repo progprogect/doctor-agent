@@ -28,16 +28,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           isUser
             ? "bg-[#D4AF37] text-white shadow-sm"
             : isAdmin
-            ? "bg-[#B8860B] text-white shadow-sm"
+            ? "bg-[#B8860B] text-white shadow-sm border border-[#D4AF37]"
             : "bg-white text-gray-900 border border-[#D4AF37]/30"
         }`}
       >
+        {isAdmin && (
+          <p className="text-xs font-semibold mb-1 text-white/90 uppercase tracking-wide">
+            Admin
+          </p>
+        )}
         <p className="text-sm whitespace-pre-wrap break-words">
           {message.content}
         </p>
         <p
           className={`text-xs mt-1 ${
-            isUser ? "text-white/80" : "text-gray-500"
+            isUser || isAdmin ? "text-white/80" : "text-gray-500"
           }`}
         >
           {formatTime(message.timestamp)}

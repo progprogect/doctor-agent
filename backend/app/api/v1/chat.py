@@ -160,6 +160,24 @@ async def send_message(
 
     await deps.dynamodb.create_message(user_message)
 
+    # Check if conversation is handled by human - don't process with agent
+    if status_value in [
+        ConversationStatus.NEEDS_HUMAN.value,
+        ConversationStatus.HUMAN_ACTIVE.value,
+    ]:
+        # Return user message without agent processing
+        role_value = (
+            user_message.role.value
+            if hasattr(user_message.role, "value")
+            else str(user_message.role)
+        )
+        return SendMessageResponse(
+            message_id=message_id,
+            role=role_value,
+            content=user_message.content,
+            timestamp=user_message.timestamp.isoformat(),
+        )
+
     # Get agent configuration
     agent_data = await deps.dynamodb.get_agent(conversation.agent_id)
     if not agent_data or "config" not in agent_data:

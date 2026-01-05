@@ -271,6 +271,14 @@ async def _handle_message(
         },
     )
 
+    # Check if conversation is handled by human - don't process with agent
+    if status_value in [
+        ConversationStatus.NEEDS_HUMAN.value,
+        ConversationStatus.HUMAN_ACTIVE.value,
+    ]:
+        # Don't process with agent, just return
+        return
+
     # Get agent configuration
     agent_data = await dynamodb.get_agent(conversation.agent_id)
     if not agent_data or "config" not in agent_data:

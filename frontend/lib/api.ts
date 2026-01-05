@@ -253,6 +253,21 @@ export const api = {
     ) as Promise<{ conversation_id: string; status: string; message: string }>;
   },
 
+  async sendAdminMessage(
+    conversationId: string,
+    adminId: string,
+    content: string
+  ): Promise<Message> {
+    return request<Message>(
+      `/api/v1/admin/conversations/${conversationId}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({ admin_id: adminId, content }),
+      },
+      true // require auth
+    );
+  },
+
   async getAuditLogs(params?: {
     admin_id?: string;
     resource_type?: string;

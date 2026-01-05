@@ -8,6 +8,7 @@ import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
 import { MessageBubble } from "@/components/chat/MessageBubble";
+import { MessageInput } from "@/components/chat/MessageInput";
 import { useConversation } from "@/lib/hooks/useConversation";
 import { useMessages } from "@/lib/hooks/useMessages";
 import { handleApiError, getUserFriendlyMessage } from "@/lib/errorHandler";
@@ -59,6 +60,21 @@ export default function ConversationDetailPage() {
       setActionError(getUserFriendlyMessage(errorInfo));
     }
   };
+
+  const handleSendAdminMessage = async (content: string) => {
+    try {
+      setActionError(null);
+      await api.sendAdminMessage(conversationId, "admin_user", content);
+      await refreshMessages();
+    } catch (err) {
+      const errorInfo = handleApiError(err);
+      setActionError(getUserFriendlyMessage(errorInfo));
+    }
+  };
+
+  const canSendAdminMessage =
+    conversation.status === "NEEDS_HUMAN" ||
+    conversation.status === "HUMAN_ACTIVE";
 
   if (isLoading) {
     return (
@@ -128,7 +144,7 @@ export default function ConversationDetailPage() {
 
       <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Messages</h2>
-        <div className="space-y-4">
+        <div className="space-y-4 mb-4">
           {messages.length === 0 ? (
             <p className="text-gray-600 text-center py-8">No messages yet</p>
           ) : (
@@ -137,6 +153,16 @@ export default function ConversationDetailPage() {
             ))
           )}
         </div>
+
+        {canSendAdminMessage && (
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <MessageInput
+              onSend={handleSendAdminMessage}
+              placeholder="Type your message as admin..."
+              disabled={false}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

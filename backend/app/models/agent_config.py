@@ -92,6 +92,18 @@ class HandoffConfig(BaseModel):
     stop_ai_after_handoff: bool = Field(default=True)
 
 
+class EscalationInstruction(BaseModel):
+    """Instruction for LLM escalation detection."""
+
+    description: str = Field(..., description="Description of escalation type")
+    examples: list[str] = Field(
+        default_factory=list, description="Example situations for this escalation type"
+    )
+    guidance: str = Field(
+        ..., description="Guidance instruction for LLM on when to escalate"
+    )
+
+
 class EscalationConfig(BaseModel):
     """Escalation rules configuration."""
 
@@ -99,8 +111,29 @@ class EscalationConfig(BaseModel):
     urgent_case_policy: str = Field(default="advise_emergency_and_handoff")
     repeat_patient_policy: str = Field(default="handoff_only")
     pre_procedure_policy: str = Field(default="handoff_only")
-    triggers: dict[str, Any] = Field(default_factory=dict)
-    actions: dict[str, Any] = Field(default_factory=dict)
+    policies: dict[str, str] = Field(
+        default_factory=dict,
+        description="Policy mappings (alternative to individual policy fields)",
+    )
+    instructions: dict[str, EscalationInstruction] = Field(
+        default_factory=dict,
+        description="LLM instructions for each escalation type",
+    )
+    triggers: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Keyword triggers (used as examples/hints for LLM)",
+    )
+    actions: dict[str, Any] = Field(
+        default_factory=dict, description="Actions to perform on escalation"
+    )
+    phone_detection: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Phone number detection configuration",
+    )
+    fast_check: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Fast keyword check configuration (optional)",
+    )
 
 
 class LLMConfig(BaseModel):
@@ -317,7 +350,18 @@ class AgentConfig(BaseModel):
             elif key == "handoff" and isinstance(value, dict):
                 config_data[key] = HandoffConfig(**value)
             elif key == "escalation" and isinstance(value, dict):
-                config_data[key] = EscalationConfig(**value)
+                # Handle instructions conversion if present
+                escalation_data = value.copy()
+                if "instructions" in escalation_data and isinstance(
+                    escalation_data["instructions"], dict
+                ):
+                    escalation_data["instructions"] = {
+                        k: EscalationInstruction(**v)
+                        if isinstance(v, dict)
+                        else v
+                        for k, v in escalation_data["instructions"].items()
+                    }
+                config_data[key] = EscalationConfig(**escalation_data)
             elif key == "llm" and isinstance(value, dict):
                 config_data[key] = LLMConfig(**value)
             elif key == "embeddings" and isinstance(value, dict):

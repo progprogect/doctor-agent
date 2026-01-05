@@ -60,6 +60,7 @@ class AgentChain:
                 EscalationTool(
                     escalation_service=self.escalation_service,
                     agent_id=self.agent_config.agent_id,
+                    agent_config=self.agent_config,
                 ),
                 BookingTool(agent_id=self.agent_config.agent_id),
             ]
@@ -153,6 +154,37 @@ Note: These examples are in English, but you should respond in the language
 the user uses (as specified in your language capabilities).
 """
 
+        # Build escalation instructions section
+        escalation_section = ""
+        if self.agent_config.escalation.instructions:
+            escalation_instructions = []
+            for esc_type, instruction in self.agent_config.escalation.instructions.items():
+                examples_text = ""
+                if instruction.examples:
+                    examples_list = "\n".join(f"  - {ex}" for ex in instruction.examples[:3])  # Limit to 3 examples
+                    examples_text = f"\n  Examples: {examples_list}"
+                
+                escalation_instructions.append(
+                    f"- {esc_type}: {instruction.description}{examples_text}"
+                )
+            
+            if escalation_instructions:
+                escalation_section = f"""
+Escalation Guidelines:
+You have access to the escalation_detector tool. Use it when you detect:
+
+{chr(10).join(escalation_instructions)}
+
+When to use escalation_detector tool:
+- Always use it when you detect urgent medical situations, severe symptoms, or life-threatening conditions
+- Use it for medical questions requiring diagnosis or treatment advice
+- Use it when user wants to book an appointment
+- Use it when user indicates they are a returning/previous patient
+- When in doubt about whether escalation is needed, use the tool to check
+
+After using escalation_detector and it indicates escalation is needed, you should stop responding and let the human admin take over.
+"""
+
         # Build final prompt with proper spacing
         prompt_parts = [
             persona,
@@ -165,10 +197,13 @@ the user uses (as specified in your language capabilities).
         if examples_section:
             prompt_parts.append(examples_section)
         
+        if escalation_section:
+            prompt_parts.append(escalation_section)
+        
         prompt_parts.append("""Remember:
 - Be friendly and professional
 - Never provide medical diagnoses or treatment advice
-- Escalate urgent or medical questions to human
+- Escalate urgent or medical questions to human using escalation_detector tool
 - Help with booking appointments
 - Use available tools when needed
 """)

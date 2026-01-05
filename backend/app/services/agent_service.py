@@ -8,7 +8,7 @@ from app.api.exceptions import MessageProcessingError
 from app.chains.agent_chain import AgentChain
 from app.models.agent_config import AgentConfig
 from app.models.conversation import ConversationStatus
-from app.services.escalation_service import EscalationService, get_escalation_service
+from app.services.escalation_service import EscalationService, create_escalation_service
 from app.services.llm_factory import LLMFactory, get_llm_factory
 from app.services.moderation_service import ModerationService, get_moderation_service
 from app.services.rag_service import RAGService, get_rag_service
@@ -77,6 +77,7 @@ class AgentService:
                 "previous_messages": conversation_history or [],
             },
             agent_id=self.agent_config.agent_id,
+            agent_config=self.agent_config,
         )
 
         if escalation_decision.needs_escalation:
@@ -205,7 +206,7 @@ def create_agent_service(
 ) -> AgentService:
     """Create agent service instance."""
     llm_factory = get_llm_factory()
-    escalation_service = get_escalation_service()
+    escalation_service = create_escalation_service(agent_config)
     moderation_service = get_moderation_service()
     rag_service = get_rag_service()
 
