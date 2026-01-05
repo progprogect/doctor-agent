@@ -147,17 +147,18 @@ class AgentService:
             try:
                 from app.utils.text_formatting import clean_agent_response
                 original_response = response
-                response = clean_agent_response(response)
-                if response != original_response:
-                    logger.debug(
-                        f"Markdown cleaned for conversation {conversation_id}",
-                        extra={
-                            "conversation_id": conversation_id,
-                            "agent_id": self.agent_config.agent_id,
-                            "original_length": len(original_response),
-                            "cleaned_length": len(response) if response else 0,
-                        },
-                    )
+                cleaned = clean_agent_response(response)
+                if cleaned is not None:
+                    response = cleaned
+                    if response != original_response:
+                        logger.info(
+                            f"Markdown cleaned for conversation {conversation_id}",
+                            extra={
+                                "conversation_id": conversation_id,
+                                "agent_id": self.agent_config.agent_id,
+                                "had_markdown": "**" in original_response or "*" in original_response,
+                            },
+                        )
             except Exception as e:
                 logger.error(
                     f"Failed to clean markdown for conversation {conversation_id}: {str(e)}",
