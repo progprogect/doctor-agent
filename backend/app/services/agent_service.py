@@ -147,18 +147,42 @@ class AgentService:
             try:
                 from app.utils.text_formatting import clean_agent_response
                 original_response = response
+                logger.info(
+                    f"Cleaning markdown for conversation {conversation_id}",
+                    extra={
+                        "conversation_id": conversation_id,
+                        "agent_id": self.agent_config.agent_id,
+                        "response_length": len(original_response) if original_response else 0,
+                        "has_markdown": "**" in (original_response or ""),
+                    },
+                )
                 cleaned = clean_agent_response(response)
                 if cleaned is not None:
                     response = cleaned
-                    if response != original_response:
-                        logger.info(
-                            f"Markdown cleaned for conversation {conversation_id}",
+                    if "**" in response:
+                        logger.warning(
+                            f"Markdown still present after cleaning for conversation {conversation_id}",
                             extra={
                                 "conversation_id": conversation_id,
                                 "agent_id": self.agent_config.agent_id,
-                                "had_markdown": "**" in original_response or "*" in original_response,
                             },
                         )
+                    else:
+                        logger.info(
+                            f"Markdown successfully cleaned for conversation {conversation_id}",
+                            extra={
+                                "conversation_id": conversation_id,
+                                "agent_id": self.agent_config.agent_id,
+                            },
+                        )
+                else:
+                    logger.warning(
+                        f"clean_agent_response returned None for conversation {conversation_id}",
+                        extra={
+                            "conversation_id": conversation_id,
+                            "agent_id": self.agent_config.agent_id,
+                        },
+                    )
             except Exception as e:
                 logger.error(
                     f"Failed to clean markdown for conversation {conversation_id}: {str(e)}",
