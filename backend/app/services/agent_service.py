@@ -147,50 +147,41 @@ class AgentService:
             try:
                 from app.utils.text_formatting import clean_agent_response
                 original_response = response
+                has_markdown_before = "**" in (original_response or "")
+                
+                # Log before cleaning
                 logger.info(
-                    f"Cleaning markdown for conversation {conversation_id}",
-                    extra={
-                        "conversation_id": conversation_id,
-                        "agent_id": self.agent_config.agent_id,
-                        "response_length": len(original_response) if original_response else 0,
-                        "has_markdown": "**" in (original_response or ""),
-                    },
+                    f"MARKDOWN_CLEANING_START: conversation_id={conversation_id}, "
+                    f"has_markdown={has_markdown_before}, "
+                    f"response_length={len(original_response) if original_response else 0}"
                 )
+                
                 cleaned = clean_agent_response(response)
+                
                 if cleaned is not None:
                     response = cleaned
-                    if "**" in response:
+                    has_markdown_after = "**" in response
+                    
+                    if has_markdown_after:
                         logger.warning(
-                            f"Markdown still present after cleaning for conversation {conversation_id}",
-                            extra={
-                                "conversation_id": conversation_id,
-                                "agent_id": self.agent_config.agent_id,
-                            },
+                            f"MARKDOWN_CLEANING_FAILED: conversation_id={conversation_id}, "
+                            f"markdown still present after cleaning"
                         )
                     else:
                         logger.info(
-                            f"Markdown successfully cleaned for conversation {conversation_id}",
-                            extra={
-                                "conversation_id": conversation_id,
-                                "agent_id": self.agent_config.agent_id,
-                            },
+                            f"MARKDOWN_CLEANING_SUCCESS: conversation_id={conversation_id}, "
+                            f"cleaned from {len(original_response)} to {len(response)} chars"
                         )
                 else:
-                    logger.warning(
-                        f"clean_agent_response returned None for conversation {conversation_id}",
-                        extra={
-                            "conversation_id": conversation_id,
-                            "agent_id": self.agent_config.agent_id,
-                        },
+                    logger.error(
+                        f"MARKDOWN_CLEANING_ERROR: conversation_id={conversation_id}, "
+                        f"clean_agent_response returned None"
                     )
             except Exception as e:
                 logger.error(
-                    f"Failed to clean markdown for conversation {conversation_id}: {str(e)}",
-                    exc_info=True,
-                    extra={
-                        "conversation_id": conversation_id,
-                        "agent_id": self.agent_config.agent_id,
-                    },
+                    f"MARKDOWN_CLEANING_EXCEPTION: conversation_id={conversation_id}, "
+                    f"error={str(e)}",
+                    exc_info=True
                 )
                 # Continue with original response if cleaning fails
         except Exception as e:
