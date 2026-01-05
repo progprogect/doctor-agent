@@ -73,8 +73,8 @@ export default function ConversationDetailPage() {
   };
 
   const canSendAdminMessage =
-    conversation.status === "NEEDS_HUMAN" ||
-    conversation.status === "HUMAN_ACTIVE";
+    conversation?.status === "NEEDS_HUMAN" ||
+    conversation?.status === "HUMAN_ACTIVE";
 
   if (isLoading) {
     return (
