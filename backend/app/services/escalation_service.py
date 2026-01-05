@@ -1,12 +1,11 @@
 """Escalation service using LLM-based detection."""
 
 import logging
-import re
 from typing import Optional
 
 from app.chains.escalation_chain import EscalationChain
 from app.models.agent_config import AgentConfig
-from app.models.escalation import ContactInfo, EscalationDecision, EscalationType
+from app.models.escalation import EscalationDecision, EscalationType
 from app.services.llm_factory import LLMFactory, get_llm_factory
 
 logger = logging.getLogger(__name__)
@@ -21,32 +20,6 @@ class EscalationService:
         self.agent_config = agent_config
         self.escalation_chain = EscalationChain(llm_factory, agent_config)
 
-    def _detect_phone_number(
-        self, message: str, agent_config: Optional[AgentConfig] = None
-    ) -> Optional[str]:
-        """Detect phone number in message using regex from config."""
-        config = agent_config or self.agent_config
-        if not config:
-            return None
-
-        phone_config = config.escalation.phone_detection
-        if not phone_config.get("enabled", False):
-            return None
-
-        regex_pattern = phone_config.get("regex", r"(\+?\d[\d\s\-\(\)]{7,}\d)")
-        try:
-            matches = re.findall(regex_pattern, message)
-            if matches:
-                # Return first match
-                return matches[0].strip()
-        except re.error as e:
-            logger.warning(
-                f"Invalid phone detection regex: {e}",
-                extra={"regex": regex_pattern},
-            )
-
-        return None
-
     async def detect_escalation(
         self,
         message: str,
@@ -54,37 +27,12 @@ class EscalationService:
         agent_id: Optional[str] = None,
         agent_config: Optional[AgentConfig] = None,
     ) -> EscalationDecision:
-        """Detect if message requires escalation."""
+        """Detect if message requires escalation using LLM-based detection."""
         # Use provided agent_config or fallback to instance config
         config = agent_config or self.agent_config
 
-        # Optional: Fast regex check as fallback (if enabled in config)
-        # This can be used as a quick check before LLM, but LLM is primary method
-        regex_phone = None
-        if config:
-            phone_config = config.escalation.phone_detection
-            # Only use regex if explicitly enabled and method is "regex" or "hybrid"
-            method = phone_config.get("method", "llm")
-            if phone_config.get("enabled", False) and method in ("regex", "hybrid"):
-                regex_phone = self._detect_phone_number(message, config)
-                if regex_phone:
-                    logger.info(
-                        f"Phone number detected via regex: {regex_phone}",
-                        extra={"agent_id": agent_id, "phone": regex_phone, "method": "regex"},
-                    )
-                    # Return early only if regex is primary method
-                    if method == "regex":
-                        return EscalationDecision(
-                            needs_escalation=True,
-                            escalation_type=EscalationType.BOOKING,
-                            confidence=1.0,
-                            reason=f"Phone number detected: {regex_phone}",
-                            suggested_action="handoff_for_booking",
-                            extracted_contacts=ContactInfo(phone_numbers=[regex_phone]),
-                        )
-
         try:
-            # Primary method: LLM-based detection with contact extraction
+            # LLM-based detection with contact extraction
             decision = await self.escalation_chain.detect(
                 message=message,
                 context=conversation_context,
@@ -126,29 +74,6 @@ class EscalationService:
                     if decision.escalation_type == EscalationType.BOOKING:
                         decision.reason = f"{decision.reason} (Phone: {', '.join(contacts.phone_numbers)})"
                         decision.confidence = min(decision.confidence + 0.1, 1.0)  # Boost confidence slightly
-
-            # Fallback: If LLM didn't extract contacts (or extracted empty) but regex found phone, merge them
-            # Check if no contacts were extracted (None or empty lists)
-            if regex_phone and method == "hybrid":
-                has_contacts = (
-                    decision.extracted_contacts
-                    and (decision.extracted_contacts.phone_numbers or decision.extracted_contacts.emails)
-                )
-                if not has_contacts:
-                    # LLM didn't find contacts, but regex did - merge them
-                    if not decision.extracted_contacts:
-                        decision.extracted_contacts = ContactInfo()
-                    decision.extracted_contacts.phone_numbers.append(regex_phone)
-                    if not decision.needs_escalation:
-                        decision.needs_escalation = True
-                        decision.escalation_type = EscalationType.BOOKING
-                        decision.confidence = 0.9
-                        decision.reason = f"Phone number detected: {regex_phone}"
-                        decision.suggested_action = "handoff_for_booking"
-                        logger.info(
-                            f"Phone number detected via regex (hybrid mode): {regex_phone}",
-                            extra={"agent_id": agent_id, "phone": regex_phone},
-                        )
 
             if decision.needs_escalation:
                 logger.info(
