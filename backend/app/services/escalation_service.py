@@ -96,7 +96,7 @@ class EscalationService:
             if decision.extracted_contacts:
                 contacts = decision.extracted_contacts
                 
-                # Log extracted contacts
+                # Log extracted contacts if any found
                 if contacts.phone_numbers or contacts.emails:
                     logger.info(
                         f"Contacts extracted: phones={contacts.phone_numbers}, emails={contacts.emails}",
@@ -127,17 +127,28 @@ class EscalationService:
                         decision.reason = f"{decision.reason} (Phone: {', '.join(contacts.phone_numbers)})"
                         decision.confidence = min(decision.confidence + 0.1, 1.0)  # Boost confidence slightly
 
-            # Fallback: If LLM didn't extract contacts but regex found phone, merge them
-            elif regex_phone and method == "hybrid":
-                if not decision.extracted_contacts:
-                    decision.extracted_contacts = ContactInfo()
-                decision.extracted_contacts.phone_numbers.append(regex_phone)
-                if not decision.needs_escalation:
-                    decision.needs_escalation = True
-                    decision.escalation_type = EscalationType.BOOKING
-                    decision.confidence = 0.9
-                    decision.reason = f"Phone number detected: {regex_phone}"
-                    decision.suggested_action = "handoff_for_booking"
+            # Fallback: If LLM didn't extract contacts (or extracted empty) but regex found phone, merge them
+            # Check if no contacts were extracted (None or empty lists)
+            if regex_phone and method == "hybrid":
+                has_contacts = (
+                    decision.extracted_contacts
+                    and (decision.extracted_contacts.phone_numbers or decision.extracted_contacts.emails)
+                )
+                if not has_contacts:
+                    # LLM didn't find contacts, but regex did - merge them
+                    if not decision.extracted_contacts:
+                        decision.extracted_contacts = ContactInfo()
+                    decision.extracted_contacts.phone_numbers.append(regex_phone)
+                    if not decision.needs_escalation:
+                        decision.needs_escalation = True
+                        decision.escalation_type = EscalationType.BOOKING
+                        decision.confidence = 0.9
+                        decision.reason = f"Phone number detected: {regex_phone}"
+                        decision.suggested_action = "handoff_for_booking"
+                        logger.info(
+                            f"Phone number detected via regex (hybrid mode): {regex_phone}",
+                            extra={"agent_id": agent_id, "phone": regex_phone},
+                        )
 
             if decision.needs_escalation:
                 logger.info(
