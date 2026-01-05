@@ -235,6 +235,29 @@ class DynamoDBClient:
         item = response.get("Item")
         return item
 
+    async def update_agent_status(
+        self, 
+        agent_id: str, 
+        is_active: bool
+    ) -> Optional[dict[str, Any]]:
+        """Update agent is_active status atomically."""
+        try:
+            response = self.tables["agents"].update_item(
+                Key={"agent_id": agent_id},
+                UpdateExpression="SET is_active = :active, updated_at = :updated_at",
+                ExpressionAttributeValues={
+                    ":active": is_active,
+                    ":updated_at": datetime.utcnow().isoformat(),
+                },
+                ReturnValues="ALL_NEW",
+                ConditionExpression="attribute_exists(agent_id)",
+            )
+            return response.get("Attributes")
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                return None  # Agent doesn't exist
+            raise RuntimeError(f"Failed to update agent status: {e}") from e
+
     async def list_agents(self, active_only: bool = True) -> list[dict[str, Any]]:
         """List all agents."""
         if active_only:

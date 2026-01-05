@@ -204,10 +204,10 @@ async def delete_agent(
     if not existing:
         raise AgentNotFoundError(agent_id)
 
-    # Soft delete - update config with is_active=False
-    updated_config = existing.get("config", {})
-    updated_config["is_active"] = False
-    await deps.dynamodb.create_agent(agent_id, updated_config)
+    # Soft delete - update is_active status atomically
+    updated = await deps.dynamodb.update_agent_status(agent_id, is_active=False)
+    if not updated:
+        raise AgentNotFoundError(agent_id)
 
     return None
 
