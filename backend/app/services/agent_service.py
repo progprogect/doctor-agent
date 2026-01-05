@@ -144,66 +144,21 @@ class AgentService:
                 response = "I apologize, but I couldn't generate a response. Please try again."
             
             # Clean markdown formatting for plain text channels (Instagram, etc.)
-            logger.info(
-                f"BEFORE_MARKDOWN_CLEANING: conversation_id={conversation_id}, "
-                f"response_preview={response[:100] if response else 'None'}"
-            )
             try:
                 from app.utils.text_formatting import clean_agent_response
-                original_response = response
-                has_markdown_before = "**" in (original_response or "")
-                
-                logger.info(
-                    f"MARKDOWN_CLEANING_START: conversation_id={conversation_id}, "
-                    f"has_markdown={has_markdown_before}, "
-                    f"response_length={len(original_response) if original_response else 0}"
-                )
-                
                 cleaned = clean_agent_response(response)
-                logger.info(
-                    f"MARKDOWN_CLEANING_CALLED: conversation_id={conversation_id}, "
-                    f"cleaned_is_none={cleaned is None}, "
-                    f"cleaned_preview={cleaned[:100] if cleaned else 'None'}"
-                )
-                
                 if cleaned is not None:
                     response = cleaned
-                    has_markdown_after = "**" in response
-                    
-                    logger.info(
-                        f"MARKDOWN_CLEANING_ASSIGNED: conversation_id={conversation_id}, "
-                        f"response_has_markdown={has_markdown_after}, "
-                        f"response_preview={response[:100]}"
-                    )
-                    
-                    if has_markdown_after:
-                        logger.warning(
-                            f"MARKDOWN_CLEANING_FAILED: conversation_id={conversation_id}, "
-                            f"markdown still present after cleaning"
-                        )
-                    else:
-                        logger.info(
-                            f"MARKDOWN_CLEANING_SUCCESS: conversation_id={conversation_id}, "
-                            f"cleaned from {len(original_response)} to {len(response)} chars"
-                        )
-                else:
-                    logger.error(
-                        f"MARKDOWN_CLEANING_ERROR: conversation_id={conversation_id}, "
-                        f"clean_agent_response returned None"
-                    )
             except Exception as e:
                 logger.error(
-                    f"MARKDOWN_CLEANING_EXCEPTION: conversation_id={conversation_id}, "
-                    f"error={str(e)}",
-                    exc_info=True
+                    f"Failed to clean markdown for conversation {conversation_id}: {str(e)}",
+                    exc_info=True,
+                    extra={
+                        "conversation_id": conversation_id,
+                        "agent_id": self.agent_config.agent_id,
+                    },
                 )
                 # Continue with original response if cleaning fails
-            
-            logger.info(
-                f"AFTER_MARKDOWN_CLEANING: conversation_id={conversation_id}, "
-                f"final_response_preview={response[:100] if response else 'None'}, "
-                f"final_has_markdown={'**' in (response or '')}"
-            )
         except Exception as e:
             logger.error(
                 f"Response generation error for conversation {conversation_id}: {str(e)}",
