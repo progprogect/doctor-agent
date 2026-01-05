@@ -202,6 +202,19 @@ async def send_message(
         }
         for msg in reversed(history_messages)  # Reverse to chronological order (oldest first)
     ]
+    
+    # CRITICAL FIX: Exclude the current user message from history
+    # The current message is already saved to DB and will be passed as 'input' to LLM
+    # Including it in chat_history causes duplication and context confusion
+    if conversation_history:
+        last_msg = conversation_history[-1]
+        # Check if last message is from user and matches current message
+        if (
+            last_msg.get("role", "").lower() == "user"
+            and last_msg.get("content", "").strip() == request.content.strip()
+        ):
+            # Remove the duplicate current message from history
+            conversation_history = conversation_history[:-1]
 
     # Process message through agent service
     agent_service = create_agent_service(agent_config, deps.dynamodb)

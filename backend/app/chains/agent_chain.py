@@ -1,5 +1,6 @@
 """Main LangChain agent chain."""
 
+import logging
 from typing import Optional
 
 from langchain.agents import AgentExecutor, create_openai_tools_agent
@@ -13,6 +14,8 @@ from app.tools.booking_tool import BookingTool
 from app.services.escalation_service import EscalationService
 from app.services.rag_service import RAGService
 from app.utils.model_params import requires_max_completion_tokens
+
+logger = logging.getLogger(__name__)
 
 
 class AgentChain:
@@ -230,6 +233,8 @@ After using escalation_detector and it indicates escalation is needed, you shoul
         if conversation_history:
             # conversation_history is already in chronological order (oldest first)
             # Take last 50 messages (most recent)
+            # IMPORTANT: Current user message should already be excluded in chat.py
+            # to avoid duplication (it's passed as 'input' separately)
             for msg in conversation_history[-50:]:  # Last 50 messages
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
@@ -239,6 +244,34 @@ After using escalation_detector and it indicates escalation is needed, you shoul
                     chat_history.append(("human", content))
                 elif role_lower == "agent":
                     chat_history.append(("ai", content))
+                # Skip admin messages as they're not part of user-agent conversation
+
+        # Log history for debugging (first and last few messages)
+        if chat_history:
+            logger.debug(
+                f"Chat history prepared: {len(chat_history)} messages",
+                extra={
+                    "agent_id": self.agent_config.agent_id,
+                    "history_length": len(chat_history),
+                    "first_message_preview": (
+                        chat_history[0][1][:50] + "..." if len(chat_history[0][1]) > 50
+                        else chat_history[0][1]
+                    ) if chat_history else None,
+                    "last_message_preview": (
+                        chat_history[-1][1][:50] + "..." if len(chat_history[-1][1]) > 50
+                        else chat_history[-1][1]
+                    ) if chat_history else None,
+                    "current_user_message_preview": user_message[:50] + "..." if len(user_message) > 50 else user_message,
+                },
+            )
+        else:
+            logger.debug(
+                "No chat history available (new conversation)",
+                extra={
+                    "agent_id": self.agent_config.agent_id,
+                    "current_user_message_preview": user_message[:50] + "..." if len(user_message) > 50 else user_message,
+                },
+            )
 
         try:
             result = await executor.ainvoke(
@@ -249,5 +282,14 @@ After using escalation_detector and it indicates escalation is needed, you shoul
             )
             return result.get("output", "I apologize, but I couldn't generate a response.")
         except Exception as e:
+            logger.error(
+                f"Error generating response: {str(e)}",
+                exc_info=True,
+                extra={
+                    "agent_id": self.agent_config.agent_id,
+                    "history_length": len(chat_history),
+                    "user_message_preview": user_message[:100] if user_message else None,
+                },
+            )
             return f"I apologize, but I encountered an error: {str(e)}"
 

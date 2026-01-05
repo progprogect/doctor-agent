@@ -32,6 +32,7 @@ class ConversationService:
         history_messages = await self.dynamodb.list_messages(
             conversation_id=conversation_id,
             limit=50,
+            reverse=True,  # Get newest first (default), will be reversed to chronological order
         )
         # Reverse to get chronological order (oldest first) for LLM context
         conversation_history = [
@@ -41,6 +42,19 @@ class ConversationService:
             }
             for msg in reversed(history_messages)  # Reverse to chronological order
         ]
+        
+        # CRITICAL FIX: Exclude the current user message from history
+        # The current message is already saved to DB and will be passed as 'input' to LLM
+        # Including it in chat_history causes duplication and context confusion
+        if conversation_history:
+            last_msg = conversation_history[-1]
+            # Check if last message is from user and matches current message
+            if (
+                last_msg.get("role", "").lower() == "user"
+                and last_msg.get("content", "").strip() == user_message.strip()
+            ):
+                # Remove the duplicate current message from history
+                conversation_history = conversation_history[:-1]
 
         # Process through agent service
         result = await agent_service.process_message(
