@@ -89,12 +89,30 @@ class AgentService:
                 request_type=escalation_decision.escalation_type.value,
             )
 
-            return {
+            result = {
                 "response": None,
                 "escalate": True,
                 "escalation_reason": escalation_decision.reason,
                 "escalation_type": escalation_decision.escalation_type.value,
             }
+            
+            # Include extracted contacts if available
+            if escalation_decision.extracted_contacts:
+                contacts = escalation_decision.extracted_contacts
+                result["extracted_contacts"] = {
+                    "phone_numbers": contacts.phone_numbers,
+                    "emails": contacts.emails,
+                }
+                logger.info(
+                    f"Extracted contacts included in escalation result",
+                    extra={
+                        "conversation_id": conversation_id,
+                        "phone_numbers": contacts.phone_numbers,
+                        "emails": contacts.emails,
+                    },
+                )
+            
+            return result
 
         # Retrieve RAG context if enabled
         rag_context = None

@@ -41,12 +41,20 @@ Your task is to analyze user messages and determine if they require human interv
 
 {base_types}
 
+Contact Information Extraction:
+When analyzing messages, also extract contact information:
+- Phone numbers: Extract ALL phone numbers in ANY format (international like +1-555-123-4567, local like 8-800-555-35-35, with spaces/dashes/parentheses, written in different languages)
+- Email addresses: Extract ALL email addresses found in the message
+- Return contacts even if they're written in different languages, formats, or embedded in text
+- If no contacts found, return empty lists
+
 Return a structured response with:
 - needs_escalation: boolean
 - escalation_type: one of the types above
 - confidence: float between 0 and 1
 - reason: brief explanation
-- suggested_action: what should happen next"""
+- suggested_action: what should happen next
+- extracted_contacts: object with phone_numbers (list of strings) and emails (list of strings)"""
 
         # Build prompt from instructions
         instructions_section = []
@@ -109,12 +117,20 @@ Your task is to analyze user messages and determine if they require human interv
 
 {base_types}{instructions_text}{policies_section}{triggers_section}
 
+Contact Information Extraction:
+When analyzing messages, also extract contact information:
+- Phone numbers: Extract ALL phone numbers in ANY format (international like +1-555-123-4567, local like 8-800-555-35-35, with spaces/dashes/parentheses, written in different languages)
+- Email addresses: Extract ALL email addresses found in the message
+- Return contacts even if they're written in different languages, formats, or embedded in text
+- If no contacts found, return empty lists
+
 Return a structured response with:
 - needs_escalation: boolean
 - escalation_type: one of the types above
 - confidence: float between 0 and 1
 - reason: brief explanation
-- suggested_action: what should happen next"""
+- suggested_action: what should happen next
+- extracted_contacts: object with phone_numbers (list of strings) and emails (list of strings)"""
 
     async def _get_chain(
         self, agent_id: Optional[str] = None, agent_config: Optional[AgentConfig] = None
