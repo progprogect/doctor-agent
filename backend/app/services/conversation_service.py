@@ -41,15 +41,6 @@ class ConversationService:
             }
             for msg in reversed(history_messages)  # Reverse to chronological order
         ]
-        # Log for debugging
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"ConversationService: Processing message for {conversation_id}")
-        logger.info(f"ConversationService: user_message={user_message[:100]}...")
-        logger.info(f"ConversationService: history_messages count={len(history_messages)}")
-        logger.info(f"ConversationService: conversation_history count={len(conversation_history)}")
-        for i, msg in enumerate(conversation_history):
-            logger.debug(f"ConversationService: History[{i}]: role={msg['role']}, content={msg['content'][:50]}...")
 
         # Process through agent service
         result = await agent_service.process_message(

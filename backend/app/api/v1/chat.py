@@ -184,12 +184,6 @@ async def send_message(
         }
         for msg in reversed(history_messages)  # Reverse to chronological order (oldest first)
     ]
-    # Log for debugging
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"Conversation history for {conversation_id}: {len(conversation_history)} messages")
-    for i, msg in enumerate(conversation_history):
-        logger.debug(f"History[{i}]: role={msg['role']}, content_preview={msg['content'][:50]}...")
 
     # Process message through agent service
     agent_service = create_agent_service(agent_config, deps.dynamodb)

@@ -142,6 +142,10 @@ class AgentService:
                     },
                 )
                 response = "I apologize, but I couldn't generate a response. Please try again."
+            
+            # Clean markdown formatting for plain text channels (Instagram, etc.)
+            from app.utils.text_formatting import clean_agent_response
+            response = clean_agent_response(response)
         except Exception as e:
             logger.error(
                 f"Response generation error for conversation {conversation_id}: {str(e)}",
