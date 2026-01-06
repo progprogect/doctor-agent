@@ -123,7 +123,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def parse_cors_origins_after(self) -> "Settings":
-        """Parse CORS origins from environment string to list after model initialization."""
+        """Parse CORS origins from environment string to list after model initialization.
+        
+        This validator runs after the model is initialized, allowing us to manually
+        parse the CORS_ORIGINS environment variable without pydantic-settings
+        attempting to parse it as JSON first.
+        """
         import json
         
         v = self.cors_origins_env
