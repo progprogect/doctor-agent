@@ -352,9 +352,13 @@ class DynamoDBClient:
     ) -> Optional[dict[str, Any]]:
         """Update agent is_active status atomically."""
         try:
+            # Use ExpressionAttributeNames for reserved keyword "is_active"
             response = self.tables["agents"].update_item(
                 Key={"agent_id": agent_id},
-                UpdateExpression="SET is_active = :active, updated_at = :updated_at",
+                UpdateExpression="SET #is_active = :active, updated_at = :updated_at",
+                ExpressionAttributeNames={
+                    "#is_active": "is_active",
+                },
                 ExpressionAttributeValues={
                     ":active": is_active,
                     ":updated_at": datetime.utcnow().isoformat(),
@@ -591,7 +595,15 @@ class DynamoDBClient:
         for key, value in kwargs.items():
             if key == "channel_type" and hasattr(value, "value"):
                 value = value.value
-            update_expression_parts.append(f"{key} = :{key}")
+            
+            # Check if key is a reserved keyword and use ExpressionAttributeNames
+            if key in self._reserved_keywords:
+                attr_placeholder = f"#{key}"
+                expression_attribute_names[attr_placeholder] = key
+                update_expression_parts.append(f"{attr_placeholder} = :{key}")
+            else:
+                update_expression_parts.append(f"{key} = :{key}")
+            
             expression_attribute_values[f":{key}"] = value
 
         if not update_expression_parts:
