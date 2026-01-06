@@ -450,13 +450,13 @@ class DynamoDBClient:
                 "IndexName": "agent_id-index",
                 "KeyConditionExpression": key_condition,
                 "ExpressionAttributeValues": expression_attribute_values,
+                # ExpressionAttributeNames is REQUIRED by boto3 when using KeyConditionExpression or FilterExpression
+                # boto3 will fail if it's None, so always provide it as a dict (even if empty)
+                "ExpressionAttributeNames": expression_attribute_names if expression_attribute_names else {},
             }
             
             if filter_expressions:
                 query_kwargs["FilterExpression"] = " AND ".join(filter_expressions)
-                # ExpressionAttributeNames is REQUIRED when FilterExpression is used
-                # boto3 will fail if it's None, so always provide it as a dict (even if empty)
-                query_kwargs["ExpressionAttributeNames"] = expression_attribute_names if expression_attribute_names else {}
 
             response = self.tables["channel_bindings"].query(**query_kwargs)
             items = response.get("Items", [])
