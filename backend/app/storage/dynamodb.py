@@ -361,20 +361,30 @@ class DynamoDBClient:
         """Get channel bindings for an agent."""
         try:
             # Use GSI if available
+            # agent_id-index has agent_id as hash key and channel_type as range key
             key_condition = "agent_id = :agent_id"
             expression_attribute_values = {":agent_id": agent_id}
-            expression_attribute_names = {}
-
+            filter_expressions = []
+            
+            # channel_type is range key in GSI, so it can be in KeyConditionExpression
             if channel_type:
                 key_condition += " AND channel_type = :channel_type"
                 expression_attribute_values[":channel_type"] = channel_type
 
-            response = self.tables["channel_bindings"].query(
-                IndexName="agent_id-index",
-                KeyConditionExpression=key_condition,
-                ExpressionAttributeValues=expression_attribute_values,
-                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else None,
-            )
+            if active_only:
+                filter_expressions.append("is_active = :is_active")
+                expression_attribute_values[":is_active"] = True
+
+            query_kwargs = {
+                "IndexName": "agent_id-index",
+                "KeyConditionExpression": key_condition,
+                "ExpressionAttributeValues": expression_attribute_values,
+            }
+            
+            if filter_expressions:
+                query_kwargs["FilterExpression"] = " AND ".join(filter_expressions)
+
+            response = self.tables["channel_bindings"].query(**query_kwargs)
             items = response.get("Items", [])
         except ClientError:
             # Fallback to scan if GSI doesn't exist
