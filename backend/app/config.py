@@ -107,61 +107,59 @@ class Settings(BaseSettings):
     )
 
     # CORS
-    # Use str type to prevent pydantic-settings from auto-parsing as JSON
-    # Then convert to list[str] in model_validator
+    # Use Optional[str] to prevent pydantic-settings from auto-parsing as JSON
+    # Then convert to list[str] in model_validator after initialization
+    _cors_origins_env: Optional[str] = Field(
+        default=None,
+        description="CORS origins from environment (will be parsed to list)",
+        json_schema_extra={"env": "CORS_ORIGINS"},
+    )
+    
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000"], 
         description="Allowed CORS origins",
-        json_schema_extra={"env": "CORS_ORIGINS"},
+        exclude=True,  # Exclude from model init, will be set in validator
     )
 
-    @model_validator(mode="before")
-    @classmethod
-    def parse_cors_origins_before(cls, data: any) -> any:
-        """Parse CORS origins from environment before pydantic-settings tries to parse as JSON."""
+    @model_validator(mode="after")
+    def parse_cors_origins_after(self) -> "Settings":
+        """Parse CORS origins from environment string to list after model initialization."""
         import json
         
-        # Handle dict (normal case from pydantic-settings)
-        if isinstance(data, dict):
-            # Check both uppercase and lowercase keys
-            for key in ["CORS_ORIGINS", "cors_origins"]:
-                if key in data:
-                    v = data[key]
-                    
-                    # If it's already a list, keep it
-                    if isinstance(v, list):
-                        return data
-                    
-                    # If it's a string, parse it
-                    if isinstance(v, str):
-                        # Handle empty string
-                        if not v.strip():
-                            data[key] = []
-                            return data
-                        
-                        # Try to parse as JSON first (in case it's a JSON string)
-                        try:
-                            parsed = json.loads(v)
-                            if isinstance(parsed, list):
-                                data[key] = parsed
-                                return data
-                        except (json.JSONDecodeError, ValueError):
-                            pass
-                        
-                        # Split by comma
-                        origins = [origin.strip() for origin in v.split(",") if origin.strip()]
-                        if "*" in origins:
-                            data[key] = ["*"]
-                        else:
-                            data[key] = origins if origins else []
-                        return data
-                    
-                    # If None, set to empty list
-                    if v is None:
-                        data[key] = []
-                        return data
+        v = self._cors_origins_env
         
-        return data
+        if v is None:
+            self.cors_origins = ["http://localhost:3000"]  # Default value
+            return self
+        
+        # If it's a string, parse it
+        if isinstance(v, str):
+            # Handle empty string
+            if not v.strip():
+                self.cors_origins = ["http://localhost:3000"]  # Default value
+                return self
+            
+            # Try to parse as JSON first (in case it's a JSON string)
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    self.cors_origins = [str(item).strip() for item in parsed if str(item).strip()]
+                    return self
+            except (json.JSONDecodeError, ValueError):
+                pass
+            
+            # Split by comma and strip whitespace
+            origins = [origin.strip() for origin in v.split(",") if origin.strip()]
+            # Handle wildcard
+            if "*" in origins:
+                self.cors_origins = ["*"]
+            else:
+                self.cors_origins = origins if origins else ["http://localhost:3000"]  # Default value
+            return self
+        
+        # Fallback to default
+        self.cors_origins = ["http://localhost:3000"]
+        return self
 
     # WebSocket
     websocket_ping_interval: int = Field(
