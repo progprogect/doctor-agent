@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -111,6 +111,53 @@ class Settings(BaseSettings):
         description="Allowed CORS origins",
         json_schema_extra={"env": "CORS_ORIGINS"},
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_cors_origins_before(cls, data: dict | list | str) -> dict:
+        """Parse CORS origins from environment before pydantic-settings tries to parse as JSON."""
+        import json
+        
+        # Handle dict (normal case)
+        if isinstance(data, dict):
+            if "CORS_ORIGINS" in data or "cors_origins" in data:
+                key = "CORS_ORIGINS" if "CORS_ORIGINS" in data else "cors_origins"
+                v = data[key]
+                
+                # If it's already a list, keep it
+                if isinstance(v, list):
+                    return data
+                
+                # If it's a string, try to parse it
+                if isinstance(v, str):
+                    # Try JSON first
+                    try:
+                        parsed = json.loads(v)
+                        if isinstance(parsed, list):
+                            data[key] = parsed
+                            return data
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                    
+                    # Handle empty string
+                    if not v.strip():
+                        data[key] = []
+                        return data
+                    
+                    # Split by comma
+                    origins = [origin.strip() for origin in v.split(",") if origin.strip()]
+                    if "*" in origins:
+                        data[key] = ["*"]
+                    else:
+                        data[key] = origins if origins else []
+                    return data
+                
+                # If None, set to empty list
+                if v is None:
+                    data[key] = []
+                    return data
+        
+        return data
 
     @field_validator("cors_origins", mode="before")
     @classmethod
