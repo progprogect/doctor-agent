@@ -109,7 +109,7 @@ class Settings(BaseSettings):
     # CORS
     # Use Optional[str] to prevent pydantic-settings from auto-parsing as JSON
     # Then convert to list[str] in model_validator after initialization
-    _cors_origins_env: Optional[str] = Field(
+    cors_origins_env: Optional[str] = Field(
         default=None,
         description="CORS origins from environment (will be parsed to list)",
         json_schema_extra={"env": "CORS_ORIGINS"},
@@ -126,7 +126,7 @@ class Settings(BaseSettings):
         """Parse CORS origins from environment string to list after model initialization."""
         import json
         
-        v = self._cors_origins_env
+        v = self.cors_origins_env
         
         if v is None:
             self.cors_origins = ["http://localhost:3000"]  # Default value
