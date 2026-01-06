@@ -45,14 +45,14 @@ jobs:
         run: |
           SERVICES="[]"
           if [ "${{ steps.filter.outputs.backend }}" == "true" ]; then
-            SERVICES=$(echo $SERVICES | jq '. += ["backend"]')
+            SERVICES=$(echo $SERVICES | jq -c '. += ["backend"]')
           fi
           if [ "${{ steps.filter.outputs.frontend }}" == "true" ]; then
-            SERVICES=$(echo $SERVICES | jq '. += ["frontend"]')
+            SERVICES=$(echo $SERVICES | jq -c '. += ["frontend"]')
           fi
           # Если ничего не изменилось, деплоим оба (для workflow_dispatch)
           if [ "$SERVICES" == "[]" ]; then
-            SERVICES='["backend", "frontend"]'
+            SERVICES='["backend","frontend"]'
           fi
           echo "services=$SERVICES" >> $GITHUB_OUTPUT
           echo "Will deploy: $SERVICES"
