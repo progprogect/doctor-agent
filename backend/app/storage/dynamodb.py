@@ -416,11 +416,8 @@ class DynamoDBClient:
             scan_kwargs = {
                 "FilterExpression": filter_expression,
                 "ExpressionAttributeValues": expression_attribute_values,
+                "ExpressionAttributeNames": expression_attribute_names,  # Always required when using FilterExpression
             }
-            
-            # Only include ExpressionAttributeNames if we have attribute names
-            if expression_attribute_names:
-                scan_kwargs["ExpressionAttributeNames"] = expression_attribute_names
 
             response = self.tables["channel_bindings"].scan(**scan_kwargs)
             items = response.get("Items", [])
