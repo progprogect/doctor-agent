@@ -59,7 +59,7 @@ export const Sidebar: React.FC = () => {
   }, [onStatsUpdate, onNewEscalation]);
 
   return (
-    <div className="w-64 bg-white border-r border-[#D4AF37]/20 flex flex-col">
+    <div className="w-64 bg-white border-r border-[#D4AF37]/20 flex flex-col flex-shrink-0">
       <div className="p-6 border-b border-[#D4AF37]/20">
         <h1 className="text-xl font-bold text-[#D4AF37]">Doctor Agent</h1>
         <p className="text-sm text-gray-600">Admin Panel</p>
