@@ -269,8 +269,10 @@ class DynamoDBClient:
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
-            # ExpressionAttributeNames is required when FilterExpression is used
-            scan_kwargs["ExpressionAttributeNames"] = expression_attribute_names if expression_attribute_names else {}
+            # Only include ExpressionAttributeNames if it's not empty
+            # DynamoDB doesn't accept empty ExpressionAttributeNames
+            if expression_attribute_names:
+                scan_kwargs["ExpressionAttributeNames"] = expression_attribute_names
 
         response = self.tables["conversations"].scan(**scan_kwargs)
         items = response.get("Items", [])
@@ -579,7 +581,7 @@ class DynamoDBClient:
                     ":channel_type": channel_type,
                     ":account_id": account_id,
                 },
-                ExpressionAttributeNames={},  # Required by boto3 when using FilterExpression
+                # Don't pass ExpressionAttributeNames if it's empty - DynamoDB doesn't accept empty dict
             )
             items = response.get("Items", [])
             if not items:
@@ -689,7 +691,7 @@ class DynamoDBClient:
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
-            scan_kwargs["ExpressionAttributeNames"] = {}  # Required by boto3 when using FilterExpression
+            # Don't pass ExpressionAttributeNames if it's empty - DynamoDB doesn't accept empty dict
 
         response = self.tables["audit_logs"].scan(**scan_kwargs)
         return response.get("Items", [])
