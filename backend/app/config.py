@@ -115,17 +115,21 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v):
         """Parse CORS origins from string with commas or list."""
         if v is None:
-            return ["http://localhost:3000"]
+            return []
         if isinstance(v, str):
+            # Handle empty string
+            if not v.strip():
+                return []
             # Split by comma and strip whitespace
             origins = [origin.strip() for origin in v.split(",") if origin.strip()]
             # Handle wildcard
             if "*" in origins:
                 return ["*"]
-            return origins if origins else ["http://localhost:3000"]
+            return origins if origins else []
         if isinstance(v, list):
             return v
-        return ["http://localhost:3000"]
+        # Fallback to empty list for any other type
+        return []
 
     # WebSocket
     websocket_ping_interval: int = Field(
