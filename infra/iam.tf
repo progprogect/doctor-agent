@@ -141,7 +141,8 @@ resource "aws_iam_role_policy" "ecs_task" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/channels/*"
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/channels/*",
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/channels/*-*"
         ]
       }
     ]
