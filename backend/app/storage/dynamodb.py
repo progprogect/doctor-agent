@@ -40,6 +40,62 @@ class DynamoDBClient:
             "channel_bindings": self.dynamodb.Table(settings.dynamodb_table_channel_bindings),
         }
         self.message_ttl_seconds = settings.message_ttl_hours * 3600
+        
+        # Reserved keywords in DynamoDB that require ExpressionAttributeNames
+        self._reserved_keywords = {"is_active", "status"}
+
+    def _build_expression_attribute_names(
+        self, attributes: list[str]
+    ) -> dict[str, str]:
+        """
+        Build ExpressionAttributeNames dict for DynamoDB reserved keywords.
+        
+        Args:
+            attributes: List of attribute names that may be reserved keywords
+            
+        Returns:
+            Dict mapping placeholder names (e.g., "#is_active") to actual names
+        """
+        result = {}
+        for attr in attributes:
+            if attr in self._reserved_keywords:
+                result[f"#{attr}"] = attr
+        return result
+
+    def _build_filter_expression(
+        self,
+        conditions: list[tuple[str, str, Any]],
+        expression_attribute_values: dict[str, Any],
+        expression_attribute_names: Optional[dict[str, str]] = None,
+    ) -> tuple[str, dict[str, Any], dict[str, str]]:
+        """
+        Build FilterExpression for DynamoDB queries/scans.
+        
+        Args:
+            conditions: List of (attribute, operator, value_placeholder) tuples
+                       e.g., [("is_active", "=", ":active")]
+            expression_attribute_values: Dict to populate with values
+            expression_attribute_names: Optional existing attribute names dict
+            
+        Returns:
+            Tuple of (filter_expression, updated_values, updated_names)
+        """
+        if not conditions:
+            return "", expression_attribute_values, expression_attribute_names or {}
+        
+        filter_parts = []
+        names = expression_attribute_names.copy() if expression_attribute_names else {}
+        
+        for attr, operator, value_placeholder in conditions:
+            # Use placeholder if attribute is reserved keyword
+            attr_placeholder = f"#{attr}" if attr in self._reserved_keywords else attr
+            if attr in self._reserved_keywords:
+                names[f"#{attr}"] = attr
+            
+            filter_parts.append(f"{attr_placeholder} {operator} {value_placeholder}")
+        
+        filter_expression = " AND ".join(filter_parts)
+        return filter_expression, expression_attribute_values, names
 
     def _convert_floats_to_decimal(self, obj: Any) -> Any:
         """Recursively convert float values to Decimal for DynamoDB compatibility."""
@@ -315,10 +371,14 @@ class DynamoDBClient:
     async def list_agents(self, active_only: bool = True) -> list[dict[str, Any]]:
         """List all agents."""
         if active_only:
+            filter_expr, attr_values, attr_names = self._build_filter_expression(
+                [("is_active", "=", ":active")],
+                {":active": True},
+            )
             response = self.tables["agents"].scan(
-                FilterExpression="#is_active = :active",
-                ExpressionAttributeValues={":active": True},
-                ExpressionAttributeNames={"#is_active": "is_active"},  # Required for reserved keyword
+                FilterExpression=filter_expr,
+                ExpressionAttributeValues=attr_values,
+                ExpressionAttributeNames=attr_names,
             )
         else:
             response = self.tables["agents"].scan()
@@ -384,16 +444,11 @@ class DynamoDBClient:
                 "IndexName": "agent_id-index",
                 "KeyConditionExpression": key_condition,
                 "ExpressionAttributeValues": expression_attribute_values,
+                "ExpressionAttributeNames": expression_attribute_names,  # Always include, even if empty
             }
             
             if filter_expressions:
                 query_kwargs["FilterExpression"] = " AND ".join(filter_expressions)
-                # Always include ExpressionAttributeNames when using FilterExpression
-                # boto3 requires it even if empty to avoid internal errors
-                query_kwargs["ExpressionAttributeNames"] = expression_attribute_names
-            elif expression_attribute_names:
-                # Include ExpressionAttributeNames if we have attribute names
-                query_kwargs["ExpressionAttributeNames"] = expression_attribute_names
 
             response = self.tables["channel_bindings"].query(**query_kwargs)
             items = response.get("Items", [])
