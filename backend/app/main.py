@@ -197,13 +197,14 @@ def create_app() -> FastAPI:
         }
 
     # API routes
-    app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
-    app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
-    app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+    # Register more specific routes first to avoid conflicts
     app.include_router(
         channel_bindings.router, prefix="/api/v1", tags=["channel-bindings"]
     )
     app.include_router(instagram.router, prefix="/api/v1", tags=["instagram"])
+    app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
+    app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
+    app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 
     # WebSocket routes
     app.include_router(websocket.router, tags=["websocket"])
