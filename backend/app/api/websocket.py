@@ -268,6 +268,7 @@ async def _handle_message(
         agent_id=conversation.agent_id,
         role=MessageRole.USER,
         content=content,
+        channel=conversation.channel,
         timestamp=datetime.utcnow(),
     )
 
@@ -311,7 +312,11 @@ async def _handle_message(
         return
 
     # Process message through agent service
-    agent_service = create_agent_service(agent_config, dynamodb)
+    # WebSocket is only for web_chat, so create WebChatSender
+    from app.services.channel_sender import WebChatSender
+    
+    web_chat_sender = WebChatSender(dynamodb)
+    agent_service = create_agent_service(agent_config, dynamodb, web_chat_sender)
     result = await conversation_service.process_message(
         conversation_id=conversation_id,
         user_message=content,

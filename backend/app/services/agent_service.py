@@ -215,17 +215,12 @@ class AgentService:
                     "moderation_result": moderation_result,
                 }
 
-        result = {
-            "response": response,
-            "escalate": False,
-            "rag_context_used": rag_context is not None,
-        }
-
         # Save agent message to database first
         from datetime import datetime
         import uuid
 
         conversation = await self.dynamodb.get_conversation(conversation_id)
+        agent_message_id = None
         if conversation:
             agent_message_id = str(uuid.uuid4())
             agent_message = Message(
@@ -235,6 +230,7 @@ class AgentService:
                 role=MessageRole.AGENT,
                 content=response,
                 channel=conversation.channel,
+                external_user_id=conversation.external_user_id,
                 timestamp=datetime.utcnow(),
             )
             await self.dynamodb.create_message(agent_message)
@@ -270,12 +266,19 @@ class AgentService:
                 )
                 # Don't fail the whole request if channel sending fails
 
+        result = {
+            "response": response,
+            "escalate": False,
+            "rag_context_used": rag_context is not None,
+            "agent_message_id": agent_message_id,
+        }
         return result
 
 
 def create_agent_service(
     agent_config: AgentConfig,
     dynamodb: DynamoDBClient,
+    channel_sender: Optional[ChannelSender] = None,
 ) -> AgentService:
     """Create agent service instance."""
     llm_factory = get_llm_factory()
@@ -290,5 +293,6 @@ def create_agent_service(
         moderation_service=moderation_service,
         rag_service=rag_service,
         dynamodb=dynamodb,
+        channel_sender=channel_sender,
     )
 

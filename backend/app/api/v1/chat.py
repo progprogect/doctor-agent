@@ -271,21 +271,26 @@ async def send_message(
             timestamp=user_message.timestamp.isoformat(),
         )
 
-    # Create agent response message
+    # Agent message is already created in agent_service.process_message
+    # Use the message_id from result if available, otherwise create new one
     agent_response = result.get("response", "I apologize, but I couldn't generate a response.")
-    agent_message_id = str(uuid.uuid4())
-    agent_message = Message(
-        message_id=agent_message_id,
-        conversation_id=conversation_id,
-        agent_id=conversation.agent_id,
-        role=MessageRole.AGENT,
-        content=agent_response,
-        channel=conversation.channel,
-        timestamp=datetime.utcnow(),
-        metadata={"rag_context_used": result.get("rag_context_used", False)},
-    )
-
-    await deps.dynamodb.create_message(agent_message)
+    agent_message_id = result.get("agent_message_id")
+    
+    # If message wasn't created in agent_service (shouldn't happen, but handle gracefully)
+    if not agent_message_id:
+        agent_message_id = str(uuid.uuid4())
+        agent_message = Message(
+            message_id=agent_message_id,
+            conversation_id=conversation_id,
+            agent_id=conversation.agent_id,
+            role=MessageRole.AGENT,
+            content=agent_response,
+            channel=conversation.channel,
+            external_user_id=conversation.external_user_id,
+            timestamp=datetime.utcnow(),
+            metadata={"rag_context_used": result.get("rag_context_used", False)},
+        )
+        await deps.dynamodb.create_message(agent_message)
 
     # Update conversation status if needed
     # Handle both enum and string status (from DynamoDB)
