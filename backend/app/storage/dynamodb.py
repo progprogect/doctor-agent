@@ -316,12 +316,13 @@ class DynamoDBClient:
             items = response.get("Items", [])
         except ClientError:
             # Fallback to scan if GSI doesn't exist
-            response = self.tables["messages"].scan(
-                FilterExpression="conversation_id = :conv_id",
-                ExpressionAttributeValues={":conv_id": conversation_id},
-                ExpressionAttributeNames={},  # Required by boto3 when using FilterExpression
-                Limit=limit,
-            )
+            # Don't pass ExpressionAttributeNames if it's empty - DynamoDB doesn't accept empty dict
+            scan_kwargs = {
+                "FilterExpression": "conversation_id = :conv_id",
+                "ExpressionAttributeValues": {":conv_id": conversation_id},
+                "Limit": limit,
+            }
+            response = self.tables["messages"].scan(**scan_kwargs)
             items = response.get("Items", [])
             # Sort by timestamp
             items.sort(key=lambda x: x.get("timestamp", ""), reverse=reverse)
