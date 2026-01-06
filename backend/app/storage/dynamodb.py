@@ -397,19 +397,28 @@ class DynamoDBClient:
             # Fallback to scan if GSI doesn't exist
             filter_expression = "agent_id = :agent_id"
             expression_attribute_values = {":agent_id": agent_id}
+            expression_attribute_names = {}
 
             if channel_type:
                 filter_expression += " AND channel_type = :channel_type"
                 expression_attribute_values[":channel_type"] = channel_type
 
             if active_only:
-                filter_expression += " AND is_active = :active"
+                # Use ExpressionAttributeNames for reserved keyword "is_active"
+                expression_attribute_names["#is_active"] = "is_active"
+                filter_expression += " AND #is_active = :active"
                 expression_attribute_values[":active"] = True
 
-            response = self.tables["channel_bindings"].scan(
-                FilterExpression=filter_expression,
-                ExpressionAttributeValues=expression_attribute_values,
-            )
+            scan_kwargs = {
+                "FilterExpression": filter_expression,
+                "ExpressionAttributeValues": expression_attribute_values,
+            }
+            
+            # Only include ExpressionAttributeNames if we have attribute names
+            if expression_attribute_names:
+                scan_kwargs["ExpressionAttributeNames"] = expression_attribute_names
+
+            response = self.tables["channel_bindings"].scan(**scan_kwargs)
             items = response.get("Items", [])
 
         # Filter by active_only if needed (when using scan)
