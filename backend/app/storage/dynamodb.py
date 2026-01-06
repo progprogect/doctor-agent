@@ -258,6 +258,7 @@ class DynamoDBClient:
             response = self.tables["messages"].scan(
                 FilterExpression="conversation_id = :conv_id",
                 ExpressionAttributeValues={":conv_id": conversation_id},
+                ExpressionAttributeNames={},  # Required by boto3 when using FilterExpression
                 Limit=limit,
             )
             items = response.get("Items", [])
@@ -315,8 +316,9 @@ class DynamoDBClient:
         """List all agents."""
         if active_only:
             response = self.tables["agents"].scan(
-                FilterExpression="is_active = :active",
+                FilterExpression="#is_active = :active",
                 ExpressionAttributeValues={":active": True},
+                ExpressionAttributeNames={"#is_active": "is_active"},  # Required for reserved keyword
             )
         else:
             response = self.tables["agents"].scan()
@@ -460,6 +462,7 @@ class DynamoDBClient:
                     ":channel_type": channel_type,
                     ":account_id": account_id,
                 },
+                ExpressionAttributeNames={},  # Required by boto3 when using FilterExpression
             )
             items = response.get("Items", [])
             if not items:
@@ -556,6 +559,7 @@ class DynamoDBClient:
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
+            scan_kwargs["ExpressionAttributeNames"] = {}  # Required by boto3 when using FilterExpression
 
         response = self.tables["audit_logs"].scan(**scan_kwargs)
         return response.get("Items", [])
