@@ -421,6 +421,8 @@ class DynamoDBClient:
         active_only: bool = True,
     ) -> list[ChannelBinding]:
         """Get channel bindings for an agent."""
+        items = []
+        
         try:
             # Use GSI if available
             # agent_id-index has agent_id as hash key and channel_type as range key
@@ -444,16 +446,32 @@ class DynamoDBClient:
                 "IndexName": "agent_id-index",
                 "KeyConditionExpression": key_condition,
                 "ExpressionAttributeValues": expression_attribute_values,
-                "ExpressionAttributeNames": expression_attribute_names,  # Always include, even if empty
             }
+            
+            # Only include ExpressionAttributeNames if it's not empty
+            if expression_attribute_names:
+                query_kwargs["ExpressionAttributeNames"] = expression_attribute_names
             
             if filter_expressions:
                 query_kwargs["FilterExpression"] = " AND ".join(filter_expressions)
 
             response = self.tables["channel_bindings"].query(**query_kwargs)
             items = response.get("Items", [])
-        except ClientError:
-            # Fallback to scan if GSI doesn't exist
+        except ClientError as e:
+            # Log error for debugging
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            error_message = e.response.get("Error", {}).get("Message", str(e))
+            logger.warning(
+                f"GSI query failed for channel bindings, falling back to scan: {error_code} - {error_message}",
+                extra={
+                    "agent_id": agent_id,
+                    "channel_type": channel_type,
+                    "active_only": active_only,
+                    "error_code": error_code,
+                },
+            )
+            
+            # Fallback to scan if GSI doesn't exist or query fails
             filter_expression = "agent_id = :agent_id"
             expression_attribute_values = {":agent_id": agent_id}
             expression_attribute_names = {}
@@ -471,17 +489,55 @@ class DynamoDBClient:
             scan_kwargs = {
                 "FilterExpression": filter_expression,
                 "ExpressionAttributeValues": expression_attribute_values,
-                "ExpressionAttributeNames": expression_attribute_names,  # Always required when using FilterExpression
             }
+            
+            # ExpressionAttributeNames is required when using FilterExpression in boto3
+            # Even if empty, it must be provided as empty dict
+            scan_kwargs["ExpressionAttributeNames"] = expression_attribute_names
 
-            response = self.tables["channel_bindings"].scan(**scan_kwargs)
-            items = response.get("Items", [])
+            try:
+                response = self.tables["channel_bindings"].scan(**scan_kwargs)
+                items = response.get("Items", [])
+            except ClientError as scan_error:
+                logger.error(
+                    f"Scan also failed for channel bindings: {scan_error}",
+                    extra={
+                        "agent_id": agent_id,
+                        "error_code": scan_error.response.get("Error", {}).get("Code", "Unknown"),
+                    },
+                    exc_info=True,
+                )
+                # Return empty list instead of raising exception
+                return []
 
-        # Filter by active_only if needed (when using scan)
+        # Filter by active_only if needed (when using scan without channel_type filter)
         if active_only and not channel_type:
             items = [item for item in items if item.get("is_active", True)]
 
-        return [ChannelBinding(**item) for item in items]
+        # Normalize items and create ChannelBinding models with error handling
+        bindings = []
+        for item in items:
+            try:
+                # Normalize empty strings to None for Optional fields
+                if "channel_username" in item and item["channel_username"] == "":
+                    item["channel_username"] = None
+                
+                binding = ChannelBinding(**item)
+                bindings.append(binding)
+            except Exception as e:
+                logger.error(
+                    f"Failed to create ChannelBinding from DynamoDB item: {e}",
+                    extra={
+                        "agent_id": agent_id,
+                        "binding_id": item.get("binding_id"),
+                        "error_type": type(e).__name__,
+                    },
+                    exc_info=True,
+                )
+                # Skip invalid items instead of failing entire request
+                continue
+        
+        return bindings
 
     async def get_channel_binding_by_account_id(
         self, channel_type: str, account_id: str
