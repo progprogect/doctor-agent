@@ -2,11 +2,13 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from app.models.message import MessageChannel
-from app.services.instagram_service import InstagramService
 from app.storage.dynamodb import DynamoDBClient
+
+if TYPE_CHECKING:
+    from app.services.instagram_service import InstagramService
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ class InstagramSender(ChannelSender):
 
     def __init__(
         self,
-        instagram_service: InstagramService,
+        instagram_service: "InstagramService",
         dynamodb: DynamoDBClient,
     ):
         """Initialize Instagram sender."""
@@ -119,7 +121,7 @@ class InstagramSender(ChannelSender):
 def get_channel_sender(
     channel: MessageChannel,
     dynamodb: DynamoDBClient,
-    instagram_service: Optional[InstagramService] = None,
+    instagram_service: Optional["InstagramService"] = None,
 ) -> ChannelSender:
     """Get appropriate channel sender for the given channel."""
     if channel == MessageChannel.WEB_CHAT:

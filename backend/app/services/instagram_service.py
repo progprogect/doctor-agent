@@ -14,7 +14,6 @@ from app.config import Settings, get_settings
 from app.models.channel_binding import ChannelType
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageChannel, MessageRole
-from app.services.agent_service import AgentService, create_agent_service
 from app.services.channel_binding_service import ChannelBindingService
 from app.storage.dynamodb import DynamoDBClient
 
@@ -192,13 +191,12 @@ class InstagramService:
 
             # Create channel sender for Instagram
             from app.services.channel_sender import InstagramSender
+            from app.services.agent_service import create_agent_service
 
             instagram_sender = InstagramSender(self, self.dynamodb)
 
             # Create agent service with channel sender
-            agent_service = create_agent_service(agent_config, self.dynamodb)
-            # Set channel sender for Instagram channel
-            agent_service.channel_sender = instagram_sender
+            agent_service = create_agent_service(agent_config, self.dynamodb, instagram_sender)
 
             result = await agent_service.process_message(
                 user_message=message_text,

@@ -14,7 +14,7 @@ from app.api.schemas import ConversationIDValidator
 from app.api.websocket import connection_manager
 from app.dependencies import CommonDependencies
 from app.models.conversation import ConversationStatus
-from app.models.message import Message, MessageRole
+from app.models.message import Message, MessageChannel, MessageRole
 
 router = APIRouter()
 
@@ -240,6 +240,7 @@ async def send_admin_message(
         agent_id=conversation.agent_id,
         role=MessageRole.ADMIN,
         content=request.content,
+        channel=conversation.channel,
         timestamp=datetime.utcnow(),
     )
 

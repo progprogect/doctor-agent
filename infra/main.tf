@@ -209,6 +209,47 @@ resource "aws_dynamodb_table" "channel_bindings" {
   )
 }
 
+resource "aws_dynamodb_table" "audit_logs" {
+  name         = "doctor-agent-audit-logs"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key = "log_id"
+
+  attribute {
+    name = "log_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "admin_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "resource_type"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "admin_id-index"
+    hash_key        = "admin_id"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "resource_type-index"
+    hash_key        = "resource_type"
+    projection_type = "ALL"
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "AuditLogs"
+    }
+  )
+}
+
 # Secrets Manager
 
 resource "aws_secretsmanager_secret" "openai" {
