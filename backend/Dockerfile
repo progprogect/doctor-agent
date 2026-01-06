@@ -8,10 +8,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Копирование requirements и установка зависимостей
+# Этот слой будет кэшироваться, если requirements.txt не изменился
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Копирование кода приложения
+# Этот слой будет пересобираться только при изменении кода
 COPY app/ ./app/
 
 # Переменные окружения

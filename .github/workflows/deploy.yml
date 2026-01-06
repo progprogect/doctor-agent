@@ -1,0 +1,162 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Позволяет запускать вручную
+
+env:
+  AWS_REGION: me-central-1
+  ECS_CLUSTER: doctor-agent-cluster
+  DOCKER_BUILDKIT: 1
+  BUILDKIT_PROGRESS: plain
+
+jobs:
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      services: ${{ steps.set-matrix.outputs.services }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy.yml'
+              - '.github/workflows/deploy-backend.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/deploy.yml'
+              - '.github/workflows/deploy-frontend.yml'
+
+      - name: Set services matrix
+        id: set-matrix
+        run: |
+          SERVICES="[]"
+          if [ "${{ steps.filter.outputs.backend }}" == "true" ]; then
+            SERVICES=$(echo $SERVICES | jq '. += ["backend"]')
+          fi
+          if [ "${{ steps.filter.outputs.frontend }}" == "true" ]; then
+            SERVICES=$(echo $SERVICES | jq '. += ["frontend"]')
+          fi
+          # Если ничего не изменилось, деплоим оба (для workflow_dispatch)
+          if [ "$SERVICES" == "[]" ]; then
+            SERVICES='["backend", "frontend"]'
+          fi
+          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          echo "Will deploy: $SERVICES"
+
+  deploy:
+    name: Deploy ${{ matrix.service }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    env:
+      ECR_REPOSITORY: doctor-agent-${{ matrix.service }}
+      ECS_SERVICE: doctor-agent-${{ matrix.service }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Cache dependencies
+        if: matrix.service == 'frontend'
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Cache pip dependencies
+        if: matrix.service == 'backend'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Pull previous image for cache
+        id: pull-cache
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker pull $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest || echo "No previous image found, will build from scratch"
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+        run: |
+          cd ${{ matrix.service }}
+          if [ "${{ matrix.service }}" == "frontend" ]; then
+            docker build \
+              --platform linux/amd64 \
+              --cache-from $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest \
+              --build-arg BUILDKIT_INLINE_CACHE=1 \
+              -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG \
+              .
+          else
+            docker build \
+              --platform linux/amd64 \
+              --cache-from $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest \
+              -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG \
+              .
+          fi
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for deployment to stabilize
+        run: |
+          echo "Waiting for ${{ matrix.service }} deployment to stabilize..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} || true
+
+      - name: Deployment status
+        run: |
+          echo "✅ ${{ matrix.service }} deployment completed!"
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'services[0].[serviceName,runningCount,desiredCount,status]' \
+            --output table
+
