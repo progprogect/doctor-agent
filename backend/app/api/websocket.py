@@ -338,23 +338,40 @@ async def _handle_message(
         return
 
     # Send agent response
+    # Agent message is already created in agent_service.process_message
     agent_response = result.get("response")
-    if agent_response:
-        agent_message = await conversation_service.send_agent_response(
-            conversation_id=conversation_id,
-            agent_response=agent_response,
-            metadata={"rag_context_used": result.get("rag_context_used", False)},
-        )
-
-        await connection_manager.send_message(
-            conversation_id,
-            {
-                "type": "message",
-                "message_id": agent_message.message_id,
-                "role": "agent",
-                "content": agent_response,
-                "timestamp": agent_message.timestamp.isoformat(),
-            },
+    agent_message_id = result.get("agent_message_id")
+    
+    if agent_response and agent_message_id:
+        # Get the message to send timestamp
+        agent_message = await dynamodb.get_message(agent_message_id)
+        if agent_message:
+            await connection_manager.send_message(
+                conversation_id,
+                {
+                    "type": "message",
+                    "message_id": agent_message_id,
+                    "role": "agent",
+                    "content": agent_response,
+                    "timestamp": agent_message.timestamp.isoformat(),
+                },
+            )
+        else:
+            # Fallback if message not found (shouldn't happen)
+            await connection_manager.send_message(
+                conversation_id,
+                {
+                    "type": "message",
+                    "message_id": agent_message_id,
+                    "role": "agent",
+                    "content": agent_response,
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            )
+    elif agent_response:
+        # If message wasn't created in agent_service (shouldn't happen, but handle gracefully)
+        await connection_manager.send_error(
+            conversation_id, "Failed to save agent response"
         )
     else:
         await connection_manager.send_error(

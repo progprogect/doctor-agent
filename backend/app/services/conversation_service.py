@@ -88,6 +88,8 @@ class ConversationService:
             agent_id=conversation.agent_id,
             role=MessageRole.AGENT,
             content=agent_response,
+            channel=conversation.channel,
+            external_user_id=conversation.external_user_id,
             timestamp=datetime.utcnow(),
             metadata=metadata or {},
         )
