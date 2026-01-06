@@ -364,6 +364,7 @@ class DynamoDBClient:
             # agent_id-index has agent_id as hash key and channel_type as range key
             key_condition = "agent_id = :agent_id"
             expression_attribute_values = {":agent_id": agent_id}
+            expression_attribute_names = {}
             filter_expressions = []
             
             # channel_type is range key in GSI, so it can be in KeyConditionExpression
@@ -372,7 +373,9 @@ class DynamoDBClient:
                 expression_attribute_values[":channel_type"] = channel_type
 
             if active_only:
-                filter_expressions.append("is_active = :is_active")
+                # Use ExpressionAttributeNames for reserved keyword "is_active"
+                expression_attribute_names["#is_active"] = "is_active"
+                filter_expressions.append("#is_active = :is_active")
                 expression_attribute_values[":is_active"] = True
 
             query_kwargs = {
@@ -383,6 +386,10 @@ class DynamoDBClient:
             
             if filter_expressions:
                 query_kwargs["FilterExpression"] = " AND ".join(filter_expressions)
+            
+            # Only include ExpressionAttributeNames if we have attribute names
+            if expression_attribute_names:
+                query_kwargs["ExpressionAttributeNames"] = expression_attribute_names
 
             response = self.tables["channel_bindings"].query(**query_kwargs)
             items = response.get("Items", [])
