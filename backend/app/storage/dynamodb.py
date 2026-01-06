@@ -184,13 +184,18 @@ class DynamoDBClient:
         expression_attribute_values[":updated_at"] = datetime.utcnow().isoformat()
 
         try:
-            self.tables["conversations"].update_item(
-                Key={"conversation_id": conversation_id},
-                UpdateExpression=f"SET {', '.join(update_expression_parts)}",
-                ExpressionAttributeValues=expression_attribute_values,
-                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else {},
-                ReturnValues="ALL_NEW",
-            )
+            update_kwargs = {
+                "Key": {"conversation_id": conversation_id},
+                "UpdateExpression": f"SET {', '.join(update_expression_parts)}",
+                "ExpressionAttributeValues": expression_attribute_values,
+                "ReturnValues": "ALL_NEW",
+            }
+            # Only include ExpressionAttributeNames if it's not empty
+            # DynamoDB doesn't accept empty ExpressionAttributeNames
+            if expression_attribute_names:
+                update_kwargs["ExpressionAttributeNames"] = expression_attribute_names
+            
+            self.tables["conversations"].update_item(**update_kwargs)
             updated_conversation = await self.get_conversation(conversation_id)
             
             # Broadcast update to admin dashboard
@@ -613,13 +618,18 @@ class DynamoDBClient:
         expression_attribute_values[":updated_at"] = datetime.utcnow().isoformat()
 
         try:
-            self.tables["channel_bindings"].update_item(
-                Key={"binding_id": binding_id},
-                UpdateExpression=f"SET {', '.join(update_expression_parts)}",
-                ExpressionAttributeValues=expression_attribute_values,
-                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else {},
-                ReturnValues="ALL_NEW",
-            )
+            update_kwargs = {
+                "Key": {"binding_id": binding_id},
+                "UpdateExpression": f"SET {', '.join(update_expression_parts)}",
+                "ExpressionAttributeValues": expression_attribute_values,
+                "ReturnValues": "ALL_NEW",
+            }
+            # Only include ExpressionAttributeNames if it's not empty
+            # DynamoDB doesn't accept empty ExpressionAttributeNames
+            if expression_attribute_names:
+                update_kwargs["ExpressionAttributeNames"] = expression_attribute_names
+            
+            self.tables["channel_bindings"].update_item(**update_kwargs)
             return await self.get_channel_binding(binding_id)
         except ClientError as e:
             logger.error(f"Failed to update channel binding: {e}")
