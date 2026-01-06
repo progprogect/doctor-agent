@@ -130,6 +130,19 @@ resource "aws_iam_role_policy" "ecs_task" {
         Resource = [
           aws_secretsmanager_secret.openai.arn
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:CreateSecret",
+          "secretsmanager:UpdateSecret",
+          "secretsmanager:DeleteSecret",
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/channels/*"
+        ]
       }
     ]
   })
