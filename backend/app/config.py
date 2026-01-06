@@ -1,9 +1,9 @@
 """Application configuration."""
 
 from functools import lru_cache
-from typing import Optional
+from typing import Annotated, Optional, Union
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import BeforeValidator, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        env_parse_none_str=True,  # Treat empty strings as None
     )
 
     # Application
@@ -106,6 +107,8 @@ class Settings(BaseSettings):
     )
 
     # CORS
+    # Use str type to prevent pydantic-settings from auto-parsing as JSON
+    # Then convert to list[str] in model_validator
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000"], 
         description="Allowed CORS origins",
@@ -114,85 +117,51 @@ class Settings(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def parse_cors_origins_before(cls, data: dict | list | str) -> dict:
+    def parse_cors_origins_before(cls, data: any) -> any:
         """Parse CORS origins from environment before pydantic-settings tries to parse as JSON."""
         import json
         
-        # Handle dict (normal case)
+        # Handle dict (normal case from pydantic-settings)
         if isinstance(data, dict):
-            if "CORS_ORIGINS" in data or "cors_origins" in data:
-                key = "CORS_ORIGINS" if "CORS_ORIGINS" in data else "cors_origins"
-                v = data[key]
-                
-                # If it's already a list, keep it
-                if isinstance(v, list):
-                    return data
-                
-                # If it's a string, try to parse it
-                if isinstance(v, str):
-                    # Try JSON first
-                    try:
-                        parsed = json.loads(v)
-                        if isinstance(parsed, list):
-                            data[key] = parsed
-                            return data
-                    except (json.JSONDecodeError, ValueError):
-                        pass
+            # Check both uppercase and lowercase keys
+            for key in ["CORS_ORIGINS", "cors_origins"]:
+                if key in data:
+                    v = data[key]
                     
-                    # Handle empty string
-                    if not v.strip():
-                        data[key] = []
+                    # If it's already a list, keep it
+                    if isinstance(v, list):
                         return data
                     
-                    # Split by comma
-                    origins = [origin.strip() for origin in v.split(",") if origin.strip()]
-                    if "*" in origins:
-                        data[key] = ["*"]
-                    else:
-                        data[key] = origins if origins else []
-                    return data
-                
-                # If None, set to empty list
-                if v is None:
-                    data[key] = []
-                    return data
+                    # If it's a string, parse it
+                    if isinstance(v, str):
+                        # Handle empty string
+                        if not v.strip():
+                            data[key] = []
+                            return data
+                        
+                        # Try to parse as JSON first (in case it's a JSON string)
+                        try:
+                            parsed = json.loads(v)
+                            if isinstance(parsed, list):
+                                data[key] = parsed
+                                return data
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                        
+                        # Split by comma
+                        origins = [origin.strip() for origin in v.split(",") if origin.strip()]
+                        if "*" in origins:
+                            data[key] = ["*"]
+                        else:
+                            data[key] = origins if origins else []
+                        return data
+                    
+                    # If None, set to empty list
+                    if v is None:
+                        data[key] = []
+                        return data
         
         return data
-
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v):
-        """Parse CORS origins from string with commas or list."""
-        try:
-            if v is None:
-                return []
-            # Handle JSON string that pydantic-settings might pass
-            if isinstance(v, str):
-                # Try to parse as JSON first (in case it's a JSON string)
-                import json
-                try:
-                    parsed = json.loads(v)
-                    if isinstance(parsed, list):
-                        return parsed
-                except (json.JSONDecodeError, ValueError):
-                    pass
-                
-                # Handle empty string
-                if not v.strip():
-                    return []
-                # Split by comma and strip whitespace
-                origins = [origin.strip() for origin in v.split(",") if origin.strip()]
-                # Handle wildcard
-                if "*" in origins:
-                    return ["*"]
-                return origins if origins else []
-            if isinstance(v, list):
-                return v
-            # Fallback to empty list for any other type
-            return []
-        except Exception:
-            # If anything goes wrong, return empty list
-            return []
 
     # WebSocket
     websocket_ping_interval: int = Field(
