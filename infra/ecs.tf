@@ -62,6 +62,10 @@ resource "aws_ecs_task_definition" "backend" {
           value = aws_dynamodb_table.messages.name
         },
         {
+          name  = "DYNAMODB_TABLE_CHANNEL_BINDINGS"
+          value = aws_dynamodb_table.channel_bindings.name
+        },
+        {
           name  = "OPENSEARCH_ENDPOINT"
           value = var.enable_opensearch && length(aws_opensearch_domain.main) > 0 ? "https://${aws_opensearch_domain.main[0].endpoint}" : ""
         },

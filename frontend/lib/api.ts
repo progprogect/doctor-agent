@@ -11,6 +11,11 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
 } from "./types";
+import type {
+  ChannelBinding,
+  CreateChannelBindingRequest,
+  UpdateChannelBindingRequest,
+} from "./types/channel";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -295,6 +300,87 @@ export const api = {
     closed: number;
   }> {
     return request("/api/v1/admin/stats", {}, true); // require auth
+  },
+
+  // Channel bindings endpoints
+  async createChannelBinding(
+    agentId: string,
+    data: CreateChannelBindingRequest
+  ): Promise<ChannelBinding> {
+    return request<ChannelBinding>(
+      `/api/v1/agents/${agentId}/channel-bindings`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      true // require auth
+    );
+  },
+
+  async listChannelBindings(
+    agentId: string,
+    channelType?: string,
+    activeOnly: boolean = true
+  ): Promise<ChannelBinding[]> {
+    const queryParams = new URLSearchParams();
+    if (channelType) queryParams.append("channel_type", channelType);
+    queryParams.append("active_only", activeOnly.toString());
+
+    return request<ChannelBinding[]>(
+      `/api/v1/agents/${agentId}/channel-bindings?${queryParams.toString()}`,
+      {},
+      true // require auth
+    );
+  },
+
+  async getChannelBinding(bindingId: string): Promise<ChannelBinding> {
+    return request<ChannelBinding>(
+      `/api/v1/channel-bindings/${bindingId}`,
+      {},
+      true // require auth
+    );
+  },
+
+  async updateChannelBinding(
+    bindingId: string,
+    data: UpdateChannelBindingRequest
+  ): Promise<ChannelBinding> {
+    return request<ChannelBinding>(
+      `/api/v1/channel-bindings/${bindingId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
+      },
+      true // require auth
+    );
+  },
+
+  async deleteChannelBinding(bindingId: string): Promise<void> {
+    await request<void>(
+      `/api/v1/channel-bindings/${bindingId}`,
+      {
+        method: "DELETE",
+      },
+      true // require auth
+    );
+  },
+
+  async verifyChannelBinding(bindingId: string): Promise<{
+    binding_id: string;
+    is_verified: boolean;
+    status: string;
+  }> {
+    return request<{
+      binding_id: string;
+      is_verified: boolean;
+      status: string;
+    }>(
+      `/api/v1/channel-bindings/${bindingId}/verify`,
+      {
+        method: "POST",
+      },
+      true // require auth
+    );
   },
 };
 

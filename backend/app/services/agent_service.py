@@ -8,6 +8,8 @@ from app.api.exceptions import MessageProcessingError
 from app.chains.agent_chain import AgentChain
 from app.models.agent_config import AgentConfig
 from app.models.conversation import ConversationStatus
+from app.models.message import Message, MessageChannel, MessageRole
+from app.services.channel_sender import ChannelSender
 from app.services.escalation_service import EscalationService, create_escalation_service
 from app.services.llm_factory import LLMFactory, get_llm_factory
 from app.services.moderation_service import ModerationService, get_moderation_service
@@ -28,6 +30,7 @@ class AgentService:
         moderation_service: ModerationService,
         rag_service: RAGService,
         dynamodb: DynamoDBClient,
+        channel_sender: Optional[ChannelSender] = None,
     ):
         """Initialize agent service."""
         self.agent_config = agent_config
@@ -36,6 +39,7 @@ class AgentService:
         self.moderation_service = moderation_service
         self.rag_service = rag_service
         self.dynamodb = dynamodb
+        self.channel_sender = channel_sender
         self.agent_chain = AgentChain(
             agent_config=agent_config,
             llm_factory=llm_factory,
@@ -211,11 +215,62 @@ class AgentService:
                     "moderation_result": moderation_result,
                 }
 
-        return {
+        result = {
             "response": response,
             "escalate": False,
             "rag_context_used": rag_context is not None,
         }
+
+        # Save agent message to database first
+        from datetime import datetime
+        import uuid
+
+        conversation = await self.dynamodb.get_conversation(conversation_id)
+        if conversation:
+            agent_message_id = str(uuid.uuid4())
+            agent_message = Message(
+                message_id=agent_message_id,
+                conversation_id=conversation_id,
+                agent_id=conversation.agent_id,
+                role=MessageRole.AGENT,
+                content=response,
+                channel=conversation.channel,
+                timestamp=datetime.utcnow(),
+            )
+            await self.dynamodb.create_message(agent_message)
+
+        # Send message through channel sender if provided and not web chat
+        # For web chat, sending is handled by WebSocket in websocket.py
+        if self.channel_sender:
+            try:
+                # Get conversation to determine channel
+                # Handle both enum and string channel (from DynamoDB)
+                conversation_channel = (
+                    conversation.channel.value
+                    if conversation and hasattr(conversation.channel, "value")
+                    else str(conversation.channel) if conversation else None
+                )
+                if conversation_channel and conversation_channel != MessageChannel.WEB_CHAT.value:
+                    await self.channel_sender.send_message(
+                        conversation_id=conversation_id,
+                        message_text=response,
+                    )
+                    logger.info(
+                        f"Sent message through channel sender for conversation {conversation_id}",
+                        extra={
+                            "conversation_id": conversation_id,
+                            "channel": conversation.channel.value if hasattr(conversation.channel, "value") else str(conversation.channel),
+                        },
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Failed to send message through channel sender: {e}",
+                    exc_info=True,
+                    extra={"conversation_id": conversation_id},
+                )
+                # Don't fail the whole request if channel sending fails
+
+        return result
 
 
 def create_agent_service(

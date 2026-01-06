@@ -72,3 +72,4 @@ jobs:
             --query 'services[0].[serviceName,runningCount,desiredCount,status]' \
             --output table
 
+

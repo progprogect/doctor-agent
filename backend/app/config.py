@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     dynamodb_table_audit_logs: str = Field(
         default="doctor-agent-audit-logs", description="Audit logs table name"
     )
+    dynamodb_table_channel_bindings: str = Field(
+        default="doctor-agent-channel-bindings", description="Channel bindings table name"
+    )
     dynamodb_endpoint_url: Optional[str] = Field(
         default=None, description="DynamoDB endpoint URL (for local development)"
     )
@@ -121,6 +124,14 @@ class Settings(BaseSettings):
     )
     rate_limit_per_minute: int = Field(
         default=60, description="Rate limit per minute per IP"
+    )
+
+    # Instagram
+    instagram_webhook_verify_token: Optional[str] = Field(
+        default=None, description="Token for Instagram webhook verification"
+    )
+    instagram_app_secret: Optional[str] = Field(
+        default=None, description="Instagram app secret for webhook signature verification"
     )
 
 

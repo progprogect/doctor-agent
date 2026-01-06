@@ -1,0 +1,275 @@
+"""Channel bindings API endpoints."""
+
+from typing import Any, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+
+from app.api.auth import require_admin
+from app.api.exceptions import AgentNotFoundError
+from app.dependencies import CommonDependencies
+from app.models.channel_binding import ChannelBinding, ChannelType
+from app.services.channel_binding_service import ChannelBindingService
+from app.storage.secrets import get_secrets_manager
+
+router = APIRouter()
+
+
+class CreateChannelBindingRequest(BaseModel):
+    """Request to create a channel binding."""
+
+    channel_type: str = Field(..., description="Channel type (e.g., 'instagram')")
+    channel_account_id: str = Field(
+        ..., description="Channel account ID (e.g., Instagram Business Account ID)"
+    )
+    access_token: str = Field(..., description="Access token for the channel")
+    channel_username: Optional[str] = Field(
+        None, description="Channel username (optional, for display)"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata (e.g., app_id, app_secret)",
+    )
+
+
+class UpdateChannelBindingRequest(BaseModel):
+    """Request to update a channel binding."""
+
+    is_active: Optional[bool] = Field(None, description="Whether binding is active")
+    access_token: Optional[str] = Field(None, description="New access token")
+    metadata: Optional[dict[str, Any]] = Field(None, description="Updated metadata")
+
+
+class ChannelBindingResponse(BaseModel):
+    """Response for channel binding."""
+
+    binding_id: str
+    agent_id: str
+    channel_type: str
+    channel_account_id: str
+    channel_username: Optional[str]
+    is_active: bool
+    is_verified: bool
+    created_at: str
+    updated_at: str
+    created_by: Optional[str]
+    metadata: dict[str, Any]
+
+    @classmethod
+    def from_binding(cls, binding: ChannelBinding) -> "ChannelBindingResponse":
+        """Create response from binding model."""
+        return cls(
+            binding_id=binding.binding_id,
+            agent_id=binding.agent_id,
+            channel_type=(
+                binding.channel_type.value
+                if hasattr(binding.channel_type, "value")
+                else str(binding.channel_type)
+            ),
+            channel_account_id=binding.channel_account_id,
+            channel_username=binding.channel_username,
+            is_active=binding.is_active,
+            is_verified=binding.is_verified,
+            created_at=binding.created_at.isoformat(),
+            updated_at=binding.updated_at.isoformat(),
+            created_by=binding.created_by,
+            metadata=binding.metadata,
+        )
+
+
+def get_channel_binding_service(
+    deps: CommonDependencies = Depends(),
+) -> ChannelBindingService:
+    """Get channel binding service instance."""
+    secrets_manager = get_secrets_manager()
+    return ChannelBindingService(deps.dynamodb, secrets_manager)
+
+
+@router.post(
+    "/agents/{agent_id}/channel-bindings",
+    response_model=ChannelBindingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_channel_binding(
+    agent_id: str,
+    request: CreateChannelBindingRequest,
+    deps: CommonDependencies = Depends(),
+    binding_service: ChannelBindingService = Depends(get_channel_binding_service),
+    _admin: str = require_admin(),
+):
+    """Create a new channel binding for an agent."""
+    # Verify agent exists
+    agent_data = await deps.dynamodb.get_agent(agent_id)
+    if not agent_data:
+        raise AgentNotFoundError(agent_id)
+
+    # Validate channel type
+    try:
+        ChannelType(request.channel_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid channel type: {request.channel_type}",
+        )
+
+    # Create binding
+    try:
+        binding = await binding_service.create_binding(
+            agent_id=agent_id,
+            channel_type=request.channel_type,
+            channel_account_id=request.channel_account_id,
+            access_token=request.access_token,
+            metadata=request.metadata,
+            created_by=_admin,
+            channel_username=request.channel_username,
+        )
+        return ChannelBindingResponse.from_binding(binding)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create channel binding: {str(e)}",
+        )
+
+
+@router.get(
+    "/agents/{agent_id}/channel-bindings",
+    response_model=list[ChannelBindingResponse],
+)
+async def list_channel_bindings(
+    agent_id: str,
+    channel_type: Optional[str] = Query(None, description="Filter by channel type"),
+    active_only: bool = Query(default=True, description="Filter only active bindings"),
+    deps: CommonDependencies = Depends(),
+    binding_service: ChannelBindingService = Depends(get_channel_binding_service),
+    _admin: str = require_admin(),
+):
+    """Get all channel bindings for an agent."""
+    # Verify agent exists
+    agent_data = await deps.dynamodb.get_agent(agent_id)
+    if not agent_data:
+        raise AgentNotFoundError(agent_id)
+
+    bindings = await binding_service.get_bindings_by_agent(
+        agent_id=agent_id,
+        channel_type=channel_type,
+        active_only=active_only,
+    )
+
+    return [ChannelBindingResponse.from_binding(binding) for binding in bindings]
+
+
+@router.get(
+    "/channel-bindings/{binding_id}",
+    response_model=ChannelBindingResponse,
+)
+async def get_channel_binding(
+    binding_id: str,
+    binding_service: ChannelBindingService = Depends(get_channel_binding_service),
+    _admin: str = require_admin(),
+):
+    """Get channel binding by ID."""
+    binding = await binding_service.get_binding(binding_id)
+    if not binding:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Channel binding {binding_id} not found",
+        )
+
+    return ChannelBindingResponse.from_binding(binding)
+
+
+@router.put(
+    "/channel-bindings/{binding_id}",
+    response_model=ChannelBindingResponse,
+)
+async def update_channel_binding(
+    binding_id: str,
+    request: UpdateChannelBindingRequest,
+    binding_service: ChannelBindingService = Depends(get_channel_binding_service),
+    _admin: str = require_admin(),
+):
+    """Update channel binding."""
+    try:
+        binding = await binding_service.update_binding(
+            binding_id=binding_id,
+            is_active=request.is_active,
+            access_token=request.access_token,
+            metadata=request.metadata,
+        )
+        return ChannelBindingResponse.from_binding(binding)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update channel binding: {str(e)}",
+        )
+
+
+@router.delete(
+    "/channel-bindings/{binding_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_channel_binding(
+    binding_id: str,
+    binding_service: ChannelBindingService = Depends(get_channel_binding_service),
+    _admin: str = require_admin(),
+):
+    """Delete channel binding."""
+    try:
+        await binding_service.delete_binding(binding_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete channel binding: {str(e)}",
+        )
+
+
+@router.post(
+    "/channel-bindings/{binding_id}/verify",
+    response_model=dict[str, Any],
+)
+async def verify_channel_binding(
+    binding_id: str,
+    binding_service: ChannelBindingService = Depends(get_channel_binding_service),
+    _admin: str = require_admin(),
+):
+    """Verify channel binding token."""
+    try:
+        is_verified = await binding_service.verify_binding(binding_id)
+        binding = await binding_service.get_binding(binding_id)
+        if not binding:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Channel binding {binding_id} not found",
+            )
+
+        return {
+            "binding_id": binding_id,
+            "is_verified": is_verified,
+            "status": "verified" if is_verified else "verification_failed",
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify channel binding: {str(e)}",
+        )
+

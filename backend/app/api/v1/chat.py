@@ -17,8 +17,13 @@ from app.api.schemas import (
 from app.dependencies import CommonDependencies
 from app.models.agent_config import AgentConfig
 from app.models.conversation import Conversation, ConversationStatus
-from app.models.message import Message, MessageRole
+from app.models.message import Message, MessageChannel, MessageRole
 from app.services.agent_service import create_agent_service
+from app.services.channel_sender import get_channel_sender
+from app.services.channel_binding_service import ChannelBindingService
+from app.services.instagram_service import InstagramService
+from app.config import get_settings
+from app.storage.secrets import get_secrets_manager
 
 router = APIRouter()
 
@@ -71,6 +76,7 @@ async def create_conversation(
     conversation = Conversation(
         conversation_id=conversation_id,
         agent_id=request.agent_id,
+        channel=MessageChannel.WEB_CHAT,  # Web chat is default channel
         status=ConversationStatus.AI_ACTIVE,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
@@ -155,6 +161,8 @@ async def send_message(
         agent_id=conversation.agent_id,
         role=MessageRole.USER,
         content=request.content,
+        channel=conversation.channel,
+        external_user_id=conversation.external_user_id,
         timestamp=datetime.utcnow(),
     )
 
@@ -216,8 +224,30 @@ async def send_message(
             # Remove the duplicate current message from history
             conversation_history = conversation_history[:-1]
 
+    # Get channel sender for the conversation's channel
+    # Handle both enum and string channel (from DynamoDB)
+    conversation_channel = (
+        conversation.channel.value
+        if hasattr(conversation.channel, "value")
+        else str(conversation.channel)
+    )
+    
+    instagram_service = None
+    if conversation_channel != MessageChannel.WEB_CHAT.value:
+        # Create Instagram service if needed
+        settings = get_settings()
+        secrets_manager = get_secrets_manager()
+        binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
+        instagram_service = InstagramService(binding_service, deps.dynamodb, settings)
+    
+    # Convert string back to enum for get_channel_sender
+    channel_enum = MessageChannel(conversation_channel) if isinstance(conversation_channel, str) else conversation.channel
+    channel_sender = get_channel_sender(
+        channel_enum, deps.dynamodb, instagram_service
+    )
+
     # Process message through agent service
-    agent_service = create_agent_service(agent_config, deps.dynamodb)
+    agent_service = create_agent_service(agent_config, deps.dynamodb, channel_sender)
     result = await agent_service.process_message(
         user_message=request.content,
         conversation_id=conversation_id,
@@ -250,6 +280,7 @@ async def send_message(
         agent_id=conversation.agent_id,
         role=MessageRole.AGENT,
         content=agent_response,
+        channel=conversation.channel,
         timestamp=datetime.utcnow(),
         metadata={"rag_context_used": result.get("rag_context_used", False)},
     )

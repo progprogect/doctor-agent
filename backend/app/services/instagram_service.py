@@ -1,0 +1,298 @@
+"""Instagram service for handling Instagram Direct Messaging."""
+
+import hashlib
+import hmac
+import json
+import logging
+import uuid
+from datetime import datetime
+from typing import Any, Optional
+
+import httpx
+
+from app.config import Settings, get_settings
+from app.models.channel_binding import ChannelType
+from app.models.conversation import Conversation, ConversationStatus
+from app.models.message import Message, MessageChannel, MessageRole
+from app.services.agent_service import AgentService, create_agent_service
+from app.services.channel_binding_service import ChannelBindingService
+from app.storage.dynamodb import DynamoDBClient
+
+logger = logging.getLogger(__name__)
+
+
+class InstagramService:
+    """Service for Instagram Direct Messaging integration."""
+
+    GRAPH_API_BASE_URL = "https://graph.instagram.com/v21.0"
+
+    def __init__(
+        self,
+        channel_binding_service: ChannelBindingService,
+        dynamodb: DynamoDBClient,
+        settings: Settings,
+    ):
+        """Initialize Instagram service."""
+        self.channel_binding_service = channel_binding_service
+        self.dynamodb = dynamodb
+        self.settings = settings
+
+    def verify_webhook(self, mode: str, token: str, challenge: str) -> Optional[str]:
+        """Verify Instagram webhook."""
+        if mode == "subscribe" and token == self.settings.instagram_webhook_verify_token:
+            logger.info("Instagram webhook verified successfully")
+            return challenge
+        logger.warning(f"Instagram webhook verification failed: mode={mode}, token mismatch")
+        return None
+
+    def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
+        """Verify webhook signature using app secret."""
+        if not self.settings.instagram_app_secret:
+            logger.warning("Instagram app secret not configured, skipping signature verification")
+            return True
+
+        expected_signature = hmac.new(
+            self.settings.instagram_app_secret.encode("utf-8"),
+            payload,
+            hashlib.sha256,
+        ).hexdigest()
+
+        # Instagram sends signature as "sha256=<hash>"
+        if signature.startswith("sha256="):
+            signature = signature[7:]
+
+        return hmac.compare_digest(expected_signature, signature)
+
+    async def handle_webhook_event(self, payload: dict[str, Any]) -> None:
+        """Handle incoming webhook event from Instagram."""
+        try:
+            # Verify webhook signature if provided
+            # Note: Signature verification should be done in the endpoint handler
+            # This method assumes signature is already verified
+
+            # Parse Instagram webhook payload
+            if payload.get("object") != "instagram":
+                logger.warning(f"Unknown webhook object type: {payload.get('object')}")
+                return
+
+            entries = payload.get("entry", [])
+            for entry in entries:
+                messaging = entry.get("messaging", [])
+                for event in messaging:
+                    await self._process_messaging_event(event)
+
+        except Exception as e:
+            logger.error(f"Error handling Instagram webhook event: {e}", exc_info=True)
+            raise
+
+    async def _process_messaging_event(self, event: dict[str, Any]) -> None:
+        """Process a single messaging event."""
+        sender = event.get("sender", {})
+        recipient = event.get("recipient", {})
+        message_data = event.get("message", {})
+
+        sender_id = sender.get("id")
+        recipient_id = recipient.get("id")  # This is the Instagram Business Account ID
+        message_text = message_data.get("text", "")
+        message_id = message_data.get("mid")
+
+        if not sender_id or not recipient_id or not message_text:
+            logger.warning(f"Incomplete messaging event: {event}")
+            return
+
+        # Find binding by Instagram account ID
+        binding = await self.channel_binding_service.get_binding_by_account_id(
+            channel_type=ChannelType.INSTAGRAM.value, account_id=recipient_id
+        )
+
+        if not binding:
+            logger.warning(
+                f"Received message from unbound Instagram account: {recipient_id}. Ignoring."
+            )
+            return
+
+        if not binding.is_active:
+            logger.warning(
+                f"Received message from inactive binding: {binding.binding_id}. Ignoring."
+            )
+            return
+
+        # Find or create conversation
+        # Use external_user_id to find existing conversation
+        conversation = await self._find_or_create_conversation(
+            agent_id=binding.agent_id,
+            external_user_id=sender_id,
+            external_conversation_id=None,  # Instagram doesn't provide thread ID in this format
+        )
+
+        # Create user message
+        user_message = Message(
+            message_id=str(uuid.uuid4()),
+            conversation_id=conversation.conversation_id,
+            agent_id=binding.agent_id,
+            role=MessageRole.USER,
+            content=message_text,
+            channel=MessageChannel.INSTAGRAM,
+            external_message_id=message_id,
+            external_user_id=sender_id,
+            timestamp=datetime.utcnow(),
+        )
+
+        await self.dynamodb.create_message(user_message)
+
+        # Check if conversation is handled by human - don't process with agent
+        status_value = (
+            conversation.status.value
+            if hasattr(conversation.status, "value")
+            else str(conversation.status)
+        )
+        if status_value in [
+            ConversationStatus.NEEDS_HUMAN.value,
+            ConversationStatus.HUMAN_ACTIVE.value,
+        ]:
+            logger.info(
+                f"Conversation {conversation.conversation_id} is handled by human, skipping agent processing"
+            )
+            return
+
+        # Process message through agent
+        try:
+            # Get agent configuration
+            agent_data = await self.dynamodb.get_agent(binding.agent_id)
+            if not agent_data or "config" not in agent_data:
+                logger.error(f"Agent {binding.agent_id} not found or invalid configuration")
+                return
+
+            from app.models.agent_config import AgentConfig
+
+            agent_config = AgentConfig.from_dict(agent_data["config"])
+
+            # Get conversation history
+            history_messages = await self.dynamodb.list_messages(
+                conversation_id=conversation.conversation_id,
+                limit=50,
+                reverse=True,
+            )
+            conversation_history = [
+                {
+                    "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
+                    "content": msg.content,
+                }
+                for msg in reversed(history_messages)
+            ]
+
+            # Exclude current user message from history
+            if conversation_history:
+                last_msg = conversation_history[-1]
+                if (
+                    last_msg.get("role", "").lower() == "user"
+                    and last_msg.get("content", "").strip() == message_text.strip()
+                ):
+                    conversation_history = conversation_history[:-1]
+
+            # Create channel sender for Instagram
+            from app.services.channel_sender import InstagramSender
+
+            instagram_sender = InstagramSender(self, self.dynamodb)
+
+            # Create agent service with channel sender
+            agent_service = create_agent_service(agent_config, self.dynamodb)
+            # Set channel sender for Instagram channel
+            agent_service.channel_sender = instagram_sender
+
+            result = await agent_service.process_message(
+                user_message=message_text,
+                conversation_id=conversation.conversation_id,
+                conversation_history=conversation_history,
+            )
+
+            # Handle escalation
+            if result.get("escalate"):
+                logger.info(
+                    f"Message escalated for conversation {conversation.conversation_id}"
+                )
+                return
+
+            # Agent response is sent via ChannelSender in AgentService.process_message
+            # No need to send manually here
+
+        except Exception as e:
+            logger.error(
+                f"Error processing message through agent: {e}", exc_info=True
+            )
+
+    async def _find_or_create_conversation(
+        self,
+        agent_id: str,
+        external_user_id: str,
+        external_conversation_id: Optional[str],
+    ) -> Conversation:
+        """Find existing conversation or create new one."""
+        # Try to find existing conversation by external_user_id
+        # For now, we'll create a new conversation for each user
+        # In the future, we could add a GSI to find conversations by external_user_id
+
+        conversation_id = str(uuid.uuid4())
+        conversation = Conversation(
+            conversation_id=conversation_id,
+            agent_id=agent_id,
+            channel=MessageChannel.INSTAGRAM,
+            external_user_id=external_user_id,
+            external_conversation_id=external_conversation_id,
+            status=ConversationStatus.AI_ACTIVE,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+
+        await self.dynamodb.create_conversation(conversation)
+        return conversation
+
+    async def send_message(
+        self, binding_id: str, recipient_id: str, message_text: str
+    ) -> dict[str, Any]:
+        """Send message via Instagram Graph API."""
+        # Get access token
+        access_token = await self.channel_binding_service.get_access_token(binding_id)
+
+        # Get binding to get account ID
+        binding = await self.channel_binding_service.get_binding(binding_id)
+        if not binding:
+            raise ValueError(f"Binding {binding_id} not found")
+
+        # Send message via Instagram Graph API
+        url = f"{self.GRAPH_API_BASE_URL}/{binding.channel_account_id}/messages"
+        payload = {
+            "recipient": {"id": recipient_id},
+            "message": {"text": message_text},
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+
+            if response.status_code != 200:
+                error_text = response.text
+                logger.error(
+                    f"Failed to send Instagram message: {response.status_code} - {error_text}"
+                )
+                response.raise_for_status()
+
+            result = response.json()
+
+            logger.info(f"Sent Instagram message to {recipient_id}")
+            return result
+
+    async def subscribe_to_webhook(
+        self, account_id: str, access_token: str
+    ) -> bool:
+        """Subscribe to webhook for Instagram account (optional, for automatic setup)."""
+        # This is optional - webhook can be set up manually in Facebook Developer Console
+        # If implementing automatic subscription, use Instagram Graph API subscriptions endpoint
+        logger.info(
+            f"Webhook subscription for account {account_id} should be configured manually in Facebook Developer Console"
+        )
+        return True
+

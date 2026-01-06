@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.models.message import MessageChannel
+
 
 class ConversationStatus(str, Enum):
     """Status of a conversation."""
@@ -21,6 +23,15 @@ class Conversation(BaseModel):
 
     conversation_id: str = Field(..., description="Unique conversation identifier")
     agent_id: str = Field(..., description="Agent ID this conversation belongs to")
+    channel: MessageChannel = Field(
+        default=MessageChannel.WEB_CHAT, description="Channel through which conversation is conducted"
+    )
+    external_conversation_id: Optional[str] = Field(
+        None, description="External conversation ID (e.g., Instagram thread ID)"
+    )
+    external_user_id: Optional[str] = Field(
+        None, description="External user ID (e.g., Instagram user ID)"
+    )
     status: ConversationStatus = Field(
         default=ConversationStatus.AI_ACTIVE, description="Current conversation status"
     )
@@ -42,6 +53,7 @@ class Conversation(BaseModel):
 
         use_enum_values = True
         json_encoders = {datetime: lambda v: v.isoformat()}
+
 
 
 

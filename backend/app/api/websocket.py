@@ -13,7 +13,7 @@ from app.api.exceptions import ConversationNotFoundError
 from app.dependencies import CommonDependencies
 from app.models.agent_config import AgentConfig
 from app.models.conversation import ConversationStatus
-from app.models.message import Message, MessageRole
+from app.models.message import Message, MessageChannel, MessageRole
 from app.services.agent_service import create_agent_service
 from app.services.conversation_service import ConversationService
 from app.storage.dynamodb import DynamoDBClient
@@ -133,6 +133,20 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
         if not conversation:
             await connection_manager.send_error(
                 conversation_id, "Conversation not found"
+            )
+            await connection_manager.disconnect(conversation_id)
+            return
+
+        # Verify conversation is for web chat channel
+        conversation_channel = (
+            conversation.channel.value
+            if hasattr(conversation.channel, "value")
+            else str(conversation.channel)
+        )
+        if conversation_channel != MessageChannel.WEB_CHAT.value:
+            await connection_manager.send_error(
+                conversation_id,
+                f"WebSocket is only available for web_chat channel, but conversation uses {conversation_channel}",
             )
             await connection_manager.disconnect(conversation_id)
             return

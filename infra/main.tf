@@ -161,6 +161,54 @@ resource "aws_dynamodb_table" "messages" {
   )
 }
 
+resource "aws_dynamodb_table" "channel_bindings" {
+  name         = "doctor-agent-channel-bindings"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key = "binding_id"
+
+  attribute {
+    name = "binding_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "agent_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "channel_type"
+    type = "S"
+  }
+
+  attribute {
+    name = "channel_account_id"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "agent_id-index"
+    hash_key        = "agent_id"
+    range_key       = "channel_type"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "channel_account-index"
+    hash_key        = "channel_type"
+    range_key       = "channel_account_id"
+    projection_type = "ALL"
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "ChannelBindings"
+    }
+  )
+}
+
 # Secrets Manager
 
 resource "aws_secretsmanager_secret" "openai" {

@@ -1,5 +1,6 @@
 """DynamoDB client wrapper."""
 
+import logging
 import time
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -11,8 +12,11 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
+from app.models.channel_binding import ChannelBinding
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageRole
+
+logger = logging.getLogger(__name__)
 
 
 class DynamoDBClient:
@@ -33,6 +37,7 @@ class DynamoDBClient:
             "messages": self.dynamodb.Table(settings.dynamodb_table_messages),
             "agents": self.dynamodb.Table(settings.dynamodb_table_agents),
             "audit_logs": self.dynamodb.Table(settings.dynamodb_table_audit_logs),
+            "channel_bindings": self.dynamodb.Table(settings.dynamodb_table_channel_bindings),
         }
         self.message_ttl_seconds = settings.message_ttl_hours * 3600
 
@@ -316,6 +321,163 @@ class DynamoDBClient:
         else:
             response = self.tables["agents"].scan()
         return response.get("Items", [])
+
+    # Channel binding operations
+    async def create_channel_binding(self, binding: ChannelBinding) -> ChannelBinding:
+        """Create a new channel binding."""
+        item = binding.model_dump(exclude_none=True)
+        # Convert datetime objects to ISO format strings for DynamoDB
+        if "created_at" in item and isinstance(item["created_at"], datetime):
+            item["created_at"] = item["created_at"].isoformat()
+        if "updated_at" in item and isinstance(item["updated_at"], datetime):
+            item["updated_at"] = item["updated_at"].isoformat()
+        # Convert enum to string
+        if "channel_type" in item:
+            item["channel_type"] = (
+                item["channel_type"].value
+                if hasattr(item["channel_type"], "value")
+                else str(item["channel_type"])
+            )
+
+        self.tables["channel_bindings"].put_item(Item=item)
+        return binding
+
+    async def get_channel_binding(self, binding_id: str) -> Optional[ChannelBinding]:
+        """Get channel binding by ID."""
+        response = self.tables["channel_bindings"].get_item(
+            Key={"binding_id": binding_id}
+        )
+        item = response.get("Item")
+        if not item:
+            return None
+        return ChannelBinding(**item)
+
+    async def get_channel_bindings_by_agent(
+        self,
+        agent_id: str,
+        channel_type: Optional[str] = None,
+        active_only: bool = True,
+    ) -> list[ChannelBinding]:
+        """Get channel bindings for an agent."""
+        try:
+            # Use GSI if available
+            key_condition = "agent_id = :agent_id"
+            expression_attribute_values = {":agent_id": agent_id}
+            expression_attribute_names = {}
+
+            if channel_type:
+                key_condition += " AND channel_type = :channel_type"
+                expression_attribute_values[":channel_type"] = channel_type
+
+            response = self.tables["channel_bindings"].query(
+                IndexName="agent_id-index",
+                KeyConditionExpression=key_condition,
+                ExpressionAttributeValues=expression_attribute_values,
+                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else None,
+            )
+            items = response.get("Items", [])
+        except ClientError:
+            # Fallback to scan if GSI doesn't exist
+            filter_expression = "agent_id = :agent_id"
+            expression_attribute_values = {":agent_id": agent_id}
+
+            if channel_type:
+                filter_expression += " AND channel_type = :channel_type"
+                expression_attribute_values[":channel_type"] = channel_type
+
+            if active_only:
+                filter_expression += " AND is_active = :active"
+                expression_attribute_values[":active"] = True
+
+            response = self.tables["channel_bindings"].scan(
+                FilterExpression=filter_expression,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
+            items = response.get("Items", [])
+
+        # Filter by active_only if needed (when using scan)
+        if active_only and not channel_type:
+            items = [item for item in items if item.get("is_active", True)]
+
+        return [ChannelBinding(**item) for item in items]
+
+    async def get_channel_binding_by_account_id(
+        self, channel_type: str, account_id: str
+    ) -> Optional[ChannelBinding]:
+        """Get channel binding by channel account ID."""
+        try:
+            # Use GSI if available
+            response = self.tables["channel_bindings"].query(
+                IndexName="channel_account-index",
+                KeyConditionExpression="channel_type = :channel_type AND channel_account_id = :account_id",
+                ExpressionAttributeValues={
+                    ":channel_type": channel_type,
+                    ":account_id": account_id,
+                },
+            )
+            items = response.get("Items", [])
+            if not items:
+                return None
+            # Return first active binding if multiple exist
+            active_bindings = [item for item in items if item.get("is_active", True)]
+            if active_bindings:
+                return ChannelBinding(**active_bindings[0])
+            # Return first binding if no active ones
+            return ChannelBinding(**items[0])
+        except ClientError:
+            # Fallback to scan if GSI doesn't exist
+            response = self.tables["channel_bindings"].scan(
+                FilterExpression="channel_type = :channel_type AND channel_account_id = :account_id",
+                ExpressionAttributeValues={
+                    ":channel_type": channel_type,
+                    ":account_id": account_id,
+                },
+            )
+            items = response.get("Items", [])
+            if not items:
+                return None
+            # Return first active binding if multiple exist
+            active_bindings = [item for item in items if item.get("is_active", True)]
+            if active_bindings:
+                return ChannelBinding(**active_bindings[0])
+            return ChannelBinding(**items[0])
+
+    async def update_channel_binding(
+        self, binding_id: str, **kwargs: Any
+    ) -> Optional[ChannelBinding]:
+        """Update channel binding."""
+        update_expression_parts = []
+        expression_attribute_values = {}
+        expression_attribute_names = {}
+
+        for key, value in kwargs.items():
+            if key == "channel_type" and hasattr(value, "value"):
+                value = value.value
+            update_expression_parts.append(f"{key} = :{key}")
+            expression_attribute_values[f":{key}"] = value
+
+        if not update_expression_parts:
+            return await self.get_channel_binding(binding_id)
+
+        update_expression_parts.append("updated_at = :updated_at")
+        expression_attribute_values[":updated_at"] = datetime.utcnow().isoformat()
+
+        try:
+            self.tables["channel_bindings"].update_item(
+                Key={"binding_id": binding_id},
+                UpdateExpression=f"SET {', '.join(update_expression_parts)}",
+                ExpressionAttributeValues=expression_attribute_values,
+                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else None,
+                ReturnValues="ALL_NEW",
+            )
+            return await self.get_channel_binding(binding_id)
+        except ClientError as e:
+            logger.error(f"Failed to update channel binding: {e}")
+            return None
+
+    async def delete_channel_binding(self, binding_id: str) -> None:
+        """Delete channel binding."""
+        self.tables["channel_bindings"].delete_item(Key={"binding_id": binding_id})
 
     # Audit log operations
     async def create_audit_log(

@@ -103,9 +103,11 @@ resource "aws_iam_role_policy" "ecs_task" {
           aws_dynamodb_table.agents.arn,
           aws_dynamodb_table.conversations.arn,
           aws_dynamodb_table.messages.arn,
+          aws_dynamodb_table.channel_bindings.arn,
           "${aws_dynamodb_table.agents.arn}/*",
           "${aws_dynamodb_table.conversations.arn}/*",
-          "${aws_dynamodb_table.messages.arn}/*"
+          "${aws_dynamodb_table.messages.arn}/*",
+          "${aws_dynamodb_table.channel_bindings.arn}/*"
         ]
       },
       {

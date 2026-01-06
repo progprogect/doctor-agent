@@ -4,12 +4,100 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { agentConfigToFormData } from "@/lib/utils/agentConfig";
 import type { Agent } from "@/lib/types/agent";
+
+function AgentRow({
+  agent,
+  onClone,
+  onEdit,
+  onDelete,
+}: {
+  agent: Agent;
+  onClone: (agent: Agent) => void;
+  onEdit: (agent: Agent) => void;
+  onDelete: (agent: Agent) => void;
+}) {
+  const [channelCount, setChannelCount] = useState<number | null>(null);
+  const [isLoadingChannels, setIsLoadingChannels] = useState(true);
+
+  useEffect(() => {
+    loadChannelCount();
+  }, [agent.agent_id]);
+
+  const loadChannelCount = async () => {
+    try {
+      const bindings = await api.listChannelBindings(agent.agent_id, undefined, false);
+      setChannelCount(bindings.length);
+    } catch (err) {
+      setChannelCount(0);
+    } finally {
+      setIsLoadingChannels(false);
+    }
+  };
+
+  return (
+    <tr className="hover:bg-[#F5D76E]/5 transition-colors duration-150">
+      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+        {agent.agent_id}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        {agent.config.profile?.doctor_display_name || "-"}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <span
+          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-sm ${
+            agent.is_active
+              ? "bg-[#F5D76E]/20 text-[#B8860B] border border-[#D4AF37]/30"
+              : "bg-gray-100 text-gray-800"
+          }`}
+        >
+          {agent.is_active ? "Active" : "Inactive"}
+        </span>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        {isLoadingChannels ? (
+          <span className="text-gray-400">Loading...</span>
+        ) : (
+          <Link
+            href={`/admin/agents/${agent.agent_id}/channels`}
+            className="text-[#D4AF37] hover:text-[#B8860B] transition-colors duration-200"
+          >
+            {channelCount ?? 0} channel{channelCount !== 1 ? "s" : ""}
+          </Link>
+        )}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+        <button
+          onClick={() => onClone(agent)}
+          className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200 cursor-pointer"
+          title="Clone this agent"
+        >
+          Clone
+        </button>
+        <button
+          onClick={() => onEdit(agent)}
+          className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200 cursor-pointer"
+          title="Edit this agent"
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => onDelete(agent)}
+          className="text-red-600 hover:text-red-700 transition-colors duration-200 cursor-pointer"
+          title="Delete this agent"
+        >
+          Delete
+        </button>
+      </td>
+    </tr>
+  );
+}
 
 export default function AgentsPage() {
   const router = useRouter();
@@ -189,54 +277,22 @@ export default function AgentsPage() {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
+                  Channels
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {agents.map((agent) => (
-                <tr key={agent.agent_id} className="hover:bg-[#F5D76E]/5 transition-colors duration-150">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {agent.agent_id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {agent.config.profile?.doctor_display_name || "-"}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-sm ${
-                        agent.is_active
-                          ? "bg-[#F5D76E]/20 text-[#B8860B] border border-[#D4AF37]/30"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {agent.is_active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleCloneAgent(agent)}
-                      className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200 cursor-pointer"
-                      title="Clone this agent"
-                    >
-                      Clone
-                    </button>
-                    <button
-                      onClick={() => handleEditAgent(agent)}
-                      className="text-[#D4AF37] hover:text-[#B8860B] mr-4 transition-colors duration-200 cursor-pointer"
-                      title="Edit this agent"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAgent(agent)}
-                      className="text-red-600 hover:text-red-700 transition-colors duration-200 cursor-pointer"
-                      title="Delete this agent"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                <AgentRow
+                  key={agent.agent_id}
+                  agent={agent}
+                  onClone={handleCloneAgent}
+                  onEdit={handleEditAgent}
+                  onDelete={handleDeleteAgent}
+                />
               ))}
             </tbody>
           </table>

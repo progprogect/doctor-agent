@@ -18,7 +18,7 @@ from app.api.middleware import (
 )
 from app.config import get_settings
 from app.utils.logging_config import setup_logging, get_logger
-from app.api.v1 import chat, agents, admin
+from app.api.v1 import chat, agents, admin, channel_bindings, instagram
 from app.api import websocket, admin_websocket
 
 # Setup logging
@@ -200,6 +200,10 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
     app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
     app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+    app.include_router(
+        channel_bindings.router, prefix="/api/v1", tags=["channel-bindings"]
+    )
+    app.include_router(instagram.router, prefix="/api/v1", tags=["instagram"])
 
     # WebSocket routes
     app.include_router(websocket.router, tags=["websocket"])

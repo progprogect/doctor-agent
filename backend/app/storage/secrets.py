@@ -148,6 +148,102 @@ class SecretsManager:
         else:
             self._cache.clear()
 
+    async def create_channel_token_secret(
+        self,
+        binding_id: str,
+        channel_type: str,
+        access_token: str,
+        metadata: dict,
+    ) -> str:
+        """Create secret for channel access token."""
+        secret_name = f"doctor-agent/channels/{channel_type}/{binding_id}/access-token"
+        secret_value = json.dumps(
+            {
+                "access_token": access_token,
+                **metadata,
+            }
+        )
+
+        try:
+            self.client.create_secret(
+                Name=secret_name,
+                SecretString=secret_value,
+                Description=f"Access token for {channel_type} channel binding {binding_id}",
+            )
+            logger.info(f"Created channel token secret: {secret_name}")
+            return secret_name
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceExistsException":
+                # Secret already exists, update it instead
+                logger.warning(f"Secret {secret_name} already exists, updating...")
+                self.client.update_secret(
+                    SecretId=secret_name,
+                    SecretString=secret_value,
+                )
+                return secret_name
+            raise RuntimeError(f"Failed to create channel token secret: {e}") from e
+
+    async def get_channel_token(self, secret_name: str) -> str:
+        """Get channel access token from secret."""
+        try:
+            secret_data = await self.get_secret(secret_name, use_cache=False)
+            # Try to parse as JSON
+            try:
+                data = json.loads(secret_data)
+                if isinstance(data, dict):
+                    # Extract access_token from JSON
+                    return data.get("access_token", secret_data)
+            except json.JSONDecodeError:
+                # Not JSON, return as-is (for backward compatibility)
+                pass
+            return secret_data
+        except ValueError as e:
+            logger.error(f"Failed to get channel token from {secret_name}: {e}")
+            raise
+
+    async def update_channel_token(
+        self,
+        secret_name: str,
+        access_token: str,
+        metadata: dict,
+    ) -> None:
+        """Update channel token in secret."""
+        secret_value = json.dumps(
+            {
+                "access_token": access_token,
+                **metadata,
+            }
+        )
+        try:
+            self.client.update_secret(
+                SecretId=secret_name,
+                SecretString=secret_value,
+            )
+            # Clear cache for this secret
+            self.clear_cache(secret_name)
+            logger.info(f"Updated channel token secret: {secret_name}")
+        except ClientError as e:
+            raise RuntimeError(f"Failed to update channel token secret: {e}") from e
+
+    async def delete_channel_token_secret(self, secret_name: str) -> None:
+        """Delete channel token secret."""
+        try:
+            self.client.delete_secret(
+                SecretId=secret_name,
+                ForceDeleteWithoutRecovery=True,
+            )
+            # Clear cache for this secret
+            self.clear_cache(secret_name)
+            logger.info(f"Deleted channel token secret: {secret_name}")
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                # Secret doesn't exist, that's fine
+                logger.warning(f"Secret {secret_name} not found, skipping deletion")
+                return
+            raise RuntimeError(f"Failed to delete channel token secret: {e}") from e
+
 
 @lru_cache()
 def get_secrets_manager() -> SecretsManager:

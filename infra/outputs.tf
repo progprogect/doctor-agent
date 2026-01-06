@@ -16,9 +16,10 @@ output "opensearch_sg_id" {
 output "dynamodb_tables" {
   description = "Map of DynamoDB table names"
   value = {
-    agents        = aws_dynamodb_table.agents.name
-    conversations = aws_dynamodb_table.conversations.name
-    messages      = aws_dynamodb_table.messages.name
+    agents           = aws_dynamodb_table.agents.name
+    conversations    = aws_dynamodb_table.conversations.name
+    messages         = aws_dynamodb_table.messages.name
+    channel_bindings = aws_dynamodb_table.channel_bindings.name
   }
 }
 

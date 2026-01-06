@@ -15,6 +15,13 @@ class MessageRole(str, Enum):
     ADMIN = "admin"
 
 
+class MessageChannel(str, Enum):
+    """Message channel type."""
+
+    WEB_CHAT = "web_chat"
+    INSTAGRAM = "instagram"
+
+
 class Message(BaseModel):
     """Message model."""
 
@@ -23,6 +30,15 @@ class Message(BaseModel):
     agent_id: str = Field(..., description="Agent ID")
     role: MessageRole = Field(..., description="Message role")
     content: str = Field(..., description="Message content")
+    channel: MessageChannel = Field(
+        default=MessageChannel.WEB_CHAT, description="Channel through which message was sent/received"
+    )
+    external_message_id: Optional[str] = Field(
+        None, description="External message ID (e.g., Instagram message ID)"
+    )
+    external_user_id: Optional[str] = Field(
+        None, description="External user ID (e.g., Instagram user ID)"
+    )
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Additional metadata"
@@ -36,6 +52,7 @@ class Message(BaseModel):
 
         use_enum_values = True
         json_encoders = {datetime: lambda v: v.isoformat()}
+
 
 
 
