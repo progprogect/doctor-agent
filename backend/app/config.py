@@ -107,29 +107,33 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = Field(
-        default=["http://localhost:3000"], description="Allowed CORS origins"
+        default_factory=lambda: ["http://localhost:3000"], description="Allowed CORS origins"
     )
 
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
         """Parse CORS origins from string with commas or list."""
-        if v is None:
-            return []
-        if isinstance(v, str):
-            # Handle empty string
-            if not v.strip():
+        try:
+            if v is None:
                 return []
-            # Split by comma and strip whitespace
-            origins = [origin.strip() for origin in v.split(",") if origin.strip()]
-            # Handle wildcard
-            if "*" in origins:
-                return ["*"]
-            return origins if origins else []
-        if isinstance(v, list):
-            return v
-        # Fallback to empty list for any other type
-        return []
+            if isinstance(v, str):
+                # Handle empty string
+                if not v.strip():
+                    return []
+                # Split by comma and strip whitespace
+                origins = [origin.strip() for origin in v.split(",") if origin.strip()]
+                # Handle wildcard
+                if "*" in origins:
+                    return ["*"]
+                return origins if origins else []
+            if isinstance(v, list):
+                return v
+            # Fallback to empty list for any other type
+            return []
+        except Exception:
+            # If anything goes wrong, return empty list
+            return []
 
     # WebSocket
     websocket_ping_interval: int = Field(
