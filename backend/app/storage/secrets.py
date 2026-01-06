@@ -205,6 +205,8 @@ class SecretsManager:
                 SecretString=secret_value,
                 Description=f"Access token for {channel_type} channel binding {binding_id}",
             )
+            # Clear cache for this secret (in case it was cached before)
+            self.clear_cache(secret_name)
             logger.info(f"Created channel token secret: {secret_name}")
             return secret_name
         except ClientError as e:
@@ -216,6 +218,8 @@ class SecretsManager:
                     SecretId=secret_name,
                     SecretString=secret_value,
                 )
+                # Clear cache for this secret after update
+                self.clear_cache(secret_name)
                 return secret_name
             raise RuntimeError(f"Failed to create channel token secret: {e}") from e
 
