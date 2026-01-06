@@ -9,12 +9,15 @@ export type ConversationStatus =
 export interface Conversation {
   conversation_id: string;
   agent_id: string;
+  channel?: string;
+  external_conversation_id?: string | null;
+  external_user_id?: string | null;
   status: ConversationStatus;
   created_at: string;
   updated_at: string;
-  closed_at?: string;
-  handoff_reason?: string;
-  request_type?: string;
+  closed_at?: string | null;
+  handoff_reason?: string | null;
+  request_type?: string | null;
   ttl?: number;
 }
 
