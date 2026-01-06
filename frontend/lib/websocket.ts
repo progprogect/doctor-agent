@@ -6,8 +6,17 @@ type MessageHandler = (message: WebSocketMessage) => void;
 type ErrorHandler = (error: Error) => void;
 type ConnectionStateHandler = (connected: boolean) => void;
 
-const WS_BASE_URL =
-  process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+// Use relative WebSocket URL when running on same domain (via ALB)
+// Convert http/https to ws/wss
+const getWebSocketUrl = (): string => {
+  if (typeof window !== "undefined" && window.location.origin) {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}`;
+  }
+  return process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+};
+
+const WS_BASE_URL = getWebSocketUrl();
 
 export class WebSocketClient {
   private ws: WebSocket | null = null;

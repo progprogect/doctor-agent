@@ -17,8 +17,11 @@ import type {
   UpdateChannelBindingRequest,
 } from "./types/channel";
 
+// Use relative URL when running on same domain (via ALB), fallback to env var or localhost
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  typeof window !== "undefined" && window.location.origin
+    ? window.location.origin
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 class ApiError extends Error {
   constructor(
