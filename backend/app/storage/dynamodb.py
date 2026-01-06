@@ -451,10 +451,7 @@ class DynamoDBClient:
             if filter_expressions:
                 query_kwargs["FilterExpression"] = " AND ".join(filter_expressions)
                 # ExpressionAttributeNames is required when FilterExpression uses reserved keywords
-                if expression_attribute_names:
-                    query_kwargs["ExpressionAttributeNames"] = expression_attribute_names
-            elif expression_attribute_names:
-                # Only include if not empty and no FilterExpression
+                # Must be provided even if empty (boto3 requirement)
                 query_kwargs["ExpressionAttributeNames"] = expression_attribute_names
 
             response = self.tables["channel_bindings"].query(**query_kwargs)
