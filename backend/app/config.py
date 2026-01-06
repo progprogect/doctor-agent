@@ -116,9 +116,12 @@ class Settings(BaseSettings):
         alias="CORS_ORIGINS",  # Explicit alias to map CORS_ORIGINS env var to this field
     )
     
+    # This field is computed from cors_origins_env in model_validator
+    # We use validation_alias to prevent pydantic-settings from trying to read CORS_ORIGINS for this field
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000"], 
         description="Allowed CORS origins",
+        validation_alias=None,  # Explicitly prevent reading from env
         exclude=True,  # Exclude from model init, will be set in validator
     )
 
