@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -109,6 +109,19 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(
         default=["http://localhost:3000"], description="Allowed CORS origins"
     )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS origins from string with commas or list."""
+        if isinstance(v, str):
+            # Split by comma and strip whitespace
+            origins = [origin.strip() for origin in v.split(",") if origin.strip()]
+            # Handle wildcard
+            if "*" in origins:
+                return ["*"]
+            return origins
+        return v
 
     # WebSocket
     websocket_ping_interval: int = Field(
