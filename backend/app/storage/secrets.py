@@ -187,20 +187,38 @@ class SecretsManager:
     async def get_channel_token(self, secret_name: str) -> str:
         """Get channel access token from secret."""
         try:
-            secret_data = await self.get_secret(secret_name, use_cache=False)
-            # Try to parse as JSON
+            # Get secret directly from AWS Secrets Manager to avoid get_secret's JSON extraction logic
+            # Channel tokens are stored as {"access_token": "...", **metadata}
+            response = self.client.get_secret_value(SecretId=secret_name)
+            secret_value = response["SecretString"]
+            
+            # Try to parse as JSON (channel tokens are stored as JSON)
             try:
-                data = json.loads(secret_data)
+                data = json.loads(secret_value)
                 if isinstance(data, dict):
                     # Extract access_token from JSON
-                    return data.get("access_token", secret_data)
+                    access_token = data.get("access_token")
+                    if access_token and isinstance(access_token, str):
+                        return access_token.strip()
+                    # If access_token not found, try to return the whole value as string
+                    logger.warning(f"access_token not found in secret {secret_name}, returning first string value")
+                    for v in data.values():
+                        if isinstance(v, str):
+                            return v.strip()
             except json.JSONDecodeError:
-                # Not JSON, return as-is (for backward compatibility)
+                # Not JSON, return as-is (for backward compatibility with plain token storage)
                 pass
-            return secret_data
-        except ValueError as e:
+            
+            # If not JSON or access_token not found, return as-is
+            return secret_value.strip()
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                raise ValueError(f"Secret {secret_name} not found") from e
+            raise RuntimeError(f"Failed to retrieve channel token from {secret_name}: {e}") from e
+        except Exception as e:
             logger.error(f"Failed to get channel token from {secret_name}: {e}")
-            raise
+            raise ValueError(f"Failed to get channel token from {secret_name}: {e}") from e
 
     async def update_channel_token(
         self,
