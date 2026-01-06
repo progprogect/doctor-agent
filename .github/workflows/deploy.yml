@@ -142,21 +142,214 @@ jobs:
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
 
-      - name: Wait for deployment to stabilize
+      - name: Show initial task status
         run: |
-          echo "Waiting for ${{ matrix.service }} deployment to stabilize..."
-          aws ecs wait services-stable \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_SERVICE }} \
-            --region ${{ env.AWS_REGION }} || true
-
-      - name: Deployment status
-        run: |
-          echo "✅ ${{ matrix.service }} deployment completed!"
+          echo "📊 Initial task status for ${{ matrix.service }}:"
           aws ecs describe-services \
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE }} \
             --region ${{ env.AWS_REGION }} \
             --query 'services[0].[serviceName,runningCount,desiredCount,status]' \
+            --output table
+          
+          echo ""
+          echo "📋 Current tasks:"
+          TASK_ARNS=$(aws ecs list-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service-name ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskArns' \
+            --output text)
+          
+          if [ -n "$TASK_ARNS" ]; then
+            aws ecs describe-tasks \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --tasks $TASK_ARNS \
+              --region ${{ env.AWS_REGION }} \
+              --query 'tasks[*].[taskArn,lastStatus,healthStatus,desiredStatus,stoppedReason]' \
+              --output table
+          else
+            echo "No tasks found yet"
+          fi
+
+      - name: Wait for deployment to stabilize
+        run: |
+          echo "⏳ Waiting for ${{ matrix.service }} deployment to stabilize..."
+          echo "This may take a few minutes..."
+          echo ""
+          
+          # Функция для вывода статуса тасков
+          show_task_status() {
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "📊 Task Status Check ($(date +%H:%M:%S)):"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            
+            # Статус сервиса
+            SERVICE_STATUS=$(aws ecs describe-services \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --services ${{ env.ECS_SERVICE }} \
+              --region ${{ env.AWS_REGION }} \
+              --query 'services[0].[runningCount,desiredCount,status]' \
+              --output text)
+            
+            echo "Service: Running/Desired/Status: $SERVICE_STATUS"
+            echo ""
+            
+            # Список тасков
+            TASK_ARNS=$(aws ecs list-tasks \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --service-name ${{ env.ECS_SERVICE }} \
+              --region ${{ env.AWS_REGION }} \
+              --query 'taskArns' \
+              --output text)
+            
+            if [ -n "$TASK_ARNS" ]; then
+              echo "Tasks:"
+              aws ecs describe-tasks \
+                --cluster ${{ env.ECS_CLUSTER }} \
+                --tasks $TASK_ARNS \
+                --region ${{ env.AWS_REGION }} \
+                --query 'tasks[*].[taskArn,lastStatus,healthStatus,desiredStatus,createdAt]' \
+                --output table
+              
+              # Проверка остановленных тасков с ошибками
+              STOPPED_TASKS=$(aws ecs describe-tasks \
+                --cluster ${{ env.ECS_CLUSTER }} \
+                --tasks $TASK_ARNS \
+                --region ${{ env.AWS_REGION }} \
+                --query 'tasks[?lastStatus==`STOPPED`]' \
+                --output json)
+              
+              if [ "$STOPPED_TASKS" != "[]" ] && [ -n "$STOPPED_TASKS" ]; then
+                echo ""
+                echo "⚠️  Stopped tasks with errors:"
+                echo "$STOPPED_TASKS" | jq -r '.[] | "Task: \(.taskArn)\n  Status: \(.lastStatus)\n  Reason: \(.stoppedReason // "N/A")\n  Exit Code: \(.containers[0].exitCode // "N/A")\n  Stop Code: \(.stopCode // "N/A")\n"'
+              fi
+            else
+              echo "No tasks found yet"
+            fi
+            echo ""
+          }
+          
+          # Показываем статус каждые 30 секунд во время ожидания
+          (
+            while true; do
+              sleep 30
+              show_task_status
+            done
+          ) &
+          STATUS_PID=$!
+          
+          # Ждем стабилизации
+          if aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }}; then
+            kill $STATUS_PID 2>/dev/null || true
+            echo "✅ Service is stable!"
+          else
+            kill $STATUS_PID 2>/dev/null || true
+            echo "⚠️  Wait timeout or service not stable"
+          fi
+
+      - name: Deployment status and task details
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 Final Deployment Status for ${{ matrix.service }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Статус сервиса
+          echo ""
+          echo "Service Status:"
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'services[0].[serviceName,runningCount,desiredCount,status]' \
+            --output table
+          
+          # Детальная информация о тасках
+          echo ""
+          echo "Task Details:"
+          TASK_ARNS=$(aws ecs list-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service-name ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskArns' \
+            --output text)
+          
+          if [ -n "$TASK_ARNS" ]; then
+            # Все таски
+            aws ecs describe-tasks \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --tasks $TASK_ARNS \
+              --region ${{ env.AWS_REGION }} \
+              --query 'tasks[*].[taskArn,lastStatus,healthStatus,desiredStatus,createdAt,startedAt]' \
+              --output table
+            
+            # Остановленные таски с деталями ошибок
+            STOPPED_TASKS=$(aws ecs describe-tasks \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --tasks $TASK_ARNS \
+              --region ${{ env.AWS_REGION }} \
+              --query 'tasks[?lastStatus==`STOPPED`]' \
+              --output json)
+            
+            if [ "$STOPPED_TASKS" != "[]" ] && [ -n "$STOPPED_TASKS" ]; then
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "❌ Stopped Tasks (Errors):"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "$STOPPED_TASKS" | jq -r '.[] | "
+                Task ARN: \(.taskArn)
+                Status: \(.lastStatus)
+                Desired Status: \(.desiredStatus)
+                Stop Code: \(.stopCode // "N/A")
+                Stopped Reason: \(.stoppedReason // "N/A")
+                Exit Code: \(.containers[0].exitCode // "N/A")
+                Container Reason: \(.containers[0].reason // "N/A")
+                Created: \(.createdAt)
+                Started: \(.startedAt // "N/A")
+                Stopped: \(.stoppedAt // "N/A")
+                ────────────────────────────────────────────
+              "'
+            fi
+            
+            # Запущенные таски
+            RUNNING_TASKS=$(aws ecs describe-tasks \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --tasks $TASK_ARNS \
+              --region ${{ env.AWS_REGION }} \
+              --query 'tasks[?lastStatus==`RUNNING`]' \
+              --output json)
+            
+            if [ "$RUNNING_TASKS" != "[]" ] && [ -n "$RUNNING_TASKS" ]; then
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "✅ Running Tasks:"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "$RUNNING_TASKS" | jq -r '.[] | "
+                Task ARN: \(.taskArn)
+                Status: \(.lastStatus)
+                Health: \(.healthStatus // "N/A")
+                Created: \(.createdAt)
+                Started: \(.startedAt // "N/A")
+                ────────────────────────────────────────────
+              "'
+            fi
+          else
+            echo "⚠️  No tasks found!"
+          fi
+          
+          # События сервиса (последние 5)
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Recent Service Events (last 5):"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'services[0].events[:5]' \
             --output table
 
