@@ -271,6 +271,7 @@ class AgentService:
             "escalate": False,
             "rag_context_used": rag_context is not None,
             "agent_message_id": agent_message_id,
+            "agent_message_timestamp": agent_message.timestamp.isoformat() if conversation and agent_message_id else None,
         }
         return result
 
