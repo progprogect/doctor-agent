@@ -107,7 +107,9 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:3000"], description="Allowed CORS origins"
+        default_factory=lambda: ["http://localhost:3000"], 
+        description="Allowed CORS origins",
+        json_schema_extra={"env": "CORS_ORIGINS"},
     )
 
     @field_validator("cors_origins", mode="before")
@@ -117,7 +119,17 @@ class Settings(BaseSettings):
         try:
             if v is None:
                 return []
+            # Handle JSON string that pydantic-settings might pass
             if isinstance(v, str):
+                # Try to parse as JSON first (in case it's a JSON string)
+                import json
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return parsed
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                
                 # Handle empty string
                 if not v.strip():
                     return []
