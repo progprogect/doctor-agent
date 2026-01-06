@@ -1,5 +1,6 @@
 """Channel bindings API endpoints."""
 
+import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,6 +13,7 @@ from app.models.channel_binding import ChannelBinding, ChannelType
 from app.services.channel_binding_service import ChannelBindingService
 from app.storage.secrets import get_secrets_manager
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -154,13 +156,24 @@ async def list_channel_bindings(
     if not agent_data:
         raise AgentNotFoundError(agent_id)
 
-    bindings = await binding_service.get_bindings_by_agent(
-        agent_id=agent_id,
-        channel_type=channel_type,
-        active_only=active_only,
-    )
+    try:
+        bindings = await binding_service.get_bindings_by_agent(
+            agent_id=agent_id,
+            channel_type=channel_type,
+            active_only=active_only,
+        )
 
-    return [ChannelBindingResponse.from_binding(binding) for binding in bindings]
+        return [ChannelBindingResponse.from_binding(binding) for binding in bindings]
+    except Exception as e:
+        logger.error(
+            f"Failed to get channel bindings for agent {agent_id}: {e}",
+            exc_info=True,
+            extra={"agent_id": agent_id, "channel_type": channel_type, "active_only": active_only},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve channel bindings: {str(e)}",
+        )
 
 
 @router.get(
