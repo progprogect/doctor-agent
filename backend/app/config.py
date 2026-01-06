@@ -16,6 +16,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         env_parse_none_str=True,  # Treat empty strings as None
+        populate_by_name=True,  # Allow both field name and alias
     )
 
     # Application
@@ -107,12 +108,12 @@ class Settings(BaseSettings):
     )
 
     # CORS
-    # Use Optional[str] to prevent pydantic-settings from auto-parsing as JSON
+    # Use Optional[str] with explicit alias to prevent pydantic-settings from auto-parsing as JSON
     # Then convert to list[str] in model_validator after initialization
     cors_origins_env: Optional[str] = Field(
         default=None,
         description="CORS origins from environment (will be parsed to list)",
-        json_schema_extra={"env": "CORS_ORIGINS"},
+        alias="CORS_ORIGINS",  # Explicit alias to map CORS_ORIGINS env var to this field
     )
     
     cors_origins: list[str] = Field(
