@@ -50,6 +50,10 @@ resource "aws_ecs_task_definition" "backend" {
           value = var.aws_region
         },
         {
+          name  = "CORS_ORIGINS"
+          value = var.enable_alb ? "http://${aws_lb.main[0].dns_name},https://${aws_lb.main[0].dns_name}" : "*"
+        },
+        {
           name  = "DYNAMODB_TABLE_AGENTS"
           value = aws_dynamodb_table.agents.name
         },
