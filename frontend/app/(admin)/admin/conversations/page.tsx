@@ -1,40 +1,36 @@
-/** Conversations monitoring page. */
+/** Conversations monitoring page with real-time updates. */
 
 "use client";
 
-import { useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useConversationsList, type ConversationFilter } from "@/lib/hooks/useConversationsList";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Button } from "@/components/shared/Button";
+import { Select } from "@/components/shared/Select";
+import { ConfirmModal } from "@/components/shared/ConfirmModal";
+import { api } from "@/lib/api";
 import Link from "next/link";
 import type { Conversation } from "@/lib/types/conversation";
 
 export default function ConversationsPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const [filter, setFilter] = useState<ConversationFilter>("all");
+  const [takeOverConversationId, setTakeOverConversationId] = useState<string | null>(null);
+  const [isTakingOver, setIsTakingOver] = useState(false);
 
-  useEffect(() => {
-    loadConversations();
-    // Refresh every 5 seconds
-    const interval = setInterval(loadConversations, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadConversations = async () => {
-    try {
-      const data = await api.listConversations({ limit: 100 });
-      setConversations(data);
-      setError(null);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError("Failed to load conversations");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    conversations,
+    isLoading,
+    error,
+    needsHumanCount,
+    isConnected,
+    refresh,
+  } = useConversationsList({
+    filter,
+    limit: 100,
+    enablePolling: true,
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -51,6 +47,37 @@ export default function ConversationsPage() {
     }
   };
 
+  const getWaitingTime = (updatedAt: string): string => {
+    const now = new Date();
+    const updated = new Date(updatedAt);
+    const diffMs = now.getTime() - updated.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m`;
+    const diffHours = Math.floor(diffMins / 60);
+    return `${diffHours}h`;
+  };
+
+  const handleTakeOver = async (conversationId: string) => {
+    try {
+      setIsTakingOver(true);
+      await api.handoffConversation(conversationId, "admin_user", "Quick takeover");
+      setTakeOverConversationId(null);
+      // Refresh to get updated status
+      await refresh();
+      // Optionally redirect to conversation detail page
+      router.push(`/admin/conversations/${conversationId}`);
+    } catch (err) {
+      console.error("Failed to take over conversation:", err);
+      alert("Failed to take over conversation. Please try again.");
+    } finally {
+      setIsTakingOver(false);
+    }
+  };
+
+  const isNeedsHuman = (status: string) => status === "NEEDS_HUMAN";
+
   if (isLoading && conversations.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -61,7 +88,45 @@ export default function ConversationsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Conversations</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Conversations</h1>
+          <p className="text-sm text-gray-600 mt-1">
+            {needsHumanCount > 0 && (
+              <span className="text-[#F59E0B] font-medium">
+                {needsHumanCount} conversation{needsHumanCount !== 1 ? "s" : ""} require{needsHumanCount === 1 ? "s" : ""} attention
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          {/* Connection status indicator */}
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full ${
+                isConnected ? "bg-green-500" : "bg-gray-400"
+              }`}
+            />
+            <span className="text-sm text-gray-600">
+              {isConnected ? "Live" : "Polling"}
+            </span>
+          </div>
+          
+          {/* Filter dropdown */}
+          <div className="w-48">
+            <Select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as ConversationFilter)}
+              options={[
+                { value: "all", label: "All Conversations" },
+                { value: "needs_attention", label: "Requires Attention" },
+                { value: "active", label: "Active" },
+                { value: "closed", label: "Closed" },
+              ]}
+            />
+          </div>
+        </div>
+      </div>
 
       {error && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-sm">
@@ -90,49 +155,110 @@ export default function ConversationsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Created
                 </th>
+                {filter === "all" || filter === "needs_attention" ? (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
+                    Waiting
+                  </th>
+                ) : null}
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {conversations.map((conv) => (
-                <tr key={conv.conversation_id} className="hover:bg-[#F5D76E]/5 transition-colors duration-150">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {conv.conversation_id.substring(0, 8)}...
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {conv.agent_id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-sm ${getStatusColor(
-                        conv.status
-                      )}`}
-                    >
-                      {conv.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(conv.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <Link
-                      href={`/admin/conversations/${conv.conversation_id}`}
-                      className="text-[#D4AF37] hover:text-[#B8860B] transition-colors duration-200"
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {conversations.map((conv) => {
+                const needsAttention = isNeedsHuman(conv.status);
+                return (
+                  <tr
+                    key={conv.conversation_id}
+                    className={`transition-colors duration-150 ${
+                      needsAttention
+                        ? "bg-[#F59E0B]/10 hover:bg-[#F59E0B]/15 border-l-4 border-[#F59E0B]"
+                        : "hover:bg-[#F5D76E]/5"
+                    }`}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        {needsAttention && (
+                          <span className="text-lg" title="Requires attention">
+                            ⚠️
+                          </span>
+                        )}
+                        <span
+                          className={`text-sm ${
+                            needsAttention ? "font-bold text-gray-900" : "font-medium text-gray-900"
+                          }`}
+                        >
+                          {conv.conversation_id.substring(0, 8)}...
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {conv.agent_id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-sm ${getStatusColor(
+                          conv.status
+                        )}`}
+                      >
+                        {conv.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(conv.created_at).toLocaleDateString()}
+                    </td>
+                    {(filter === "all" || filter === "needs_attention") && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {needsAttention ? (
+                          <span className="text-[#F59E0B] font-medium">
+                            {getWaitingTime(conv.updated_at)}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    )}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center gap-3">
+                        {needsAttention && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => setTakeOverConversationId(conv.conversation_id)}
+                            disabled={isTakingOver}
+                          >
+                            Take Over
+                          </Button>
+                        )}
+                        <Link
+                          href={`/admin/conversations/${conv.conversation_id}`}
+                          className="text-[#D4AF37] hover:text-[#B8860B] transition-colors duration-200"
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Take Over Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!takeOverConversationId}
+        onClose={() => setTakeOverConversationId(null)}
+        onConfirm={() => takeOverConversationId && handleTakeOver(takeOverConversationId)}
+        title="Take Over Conversation"
+        message="Are you sure you want to take over this conversation? You will be able to respond to the user directly."
+        confirmText="Take Over"
+        cancelText="Cancel"
+        isLoading={isTakingOver}
+        variant="warning"
+      />
     </div>
   );
 }
-
-
-

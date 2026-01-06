@@ -19,7 +19,7 @@ from app.api.middleware import (
 from app.config import get_settings
 from app.utils.logging_config import setup_logging, get_logger
 from app.api.v1 import chat, agents, admin
-from app.api import websocket
+from app.api import websocket, admin_websocket
 
 # Setup logging
 settings = get_settings()
@@ -203,6 +203,7 @@ def create_app() -> FastAPI:
 
     # WebSocket routes
     app.include_router(websocket.router, tags=["websocket"])
+    app.include_router(admin_websocket.router, tags=["admin-websocket"])
 
     return app
 

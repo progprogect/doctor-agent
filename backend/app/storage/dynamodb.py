@@ -85,6 +85,16 @@ class DynamoDBClient:
         **kwargs: Any,
     ) -> Optional[Conversation]:
         """Update conversation."""
+        # Get old conversation to check status change
+        old_conversation = await self.get_conversation(conversation_id)
+        old_status = None
+        if old_conversation:
+            old_status = (
+                old_conversation.status.value
+                if hasattr(old_conversation.status, "value")
+                else str(old_conversation.status)
+            )
+
         update_expression_parts = []
         expression_attribute_values = {}
         expression_attribute_names = {}
@@ -120,7 +130,45 @@ class DynamoDBClient:
                 ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else None,
                 ReturnValues="ALL_NEW",
             )
-            return await self.get_conversation(conversation_id)
+            updated_conversation = await self.get_conversation(conversation_id)
+            
+            # Broadcast update to admin dashboard
+            if updated_conversation:
+                try:
+                    from app.api.admin_websocket import get_admin_broadcast_manager
+                    from app.models.conversation import ConversationStatus
+                    
+                    broadcast_manager = get_admin_broadcast_manager()
+                    new_status = (
+                        updated_conversation.status.value
+                        if hasattr(updated_conversation.status, "value")
+                        else str(updated_conversation.status)
+                    )
+                    
+                    # Check if this is a new escalation (status changed to NEEDS_HUMAN)
+                    if (
+                        status
+                        and status == ConversationStatus.NEEDS_HUMAN
+                        and (old_status is None or old_status != ConversationStatus.NEEDS_HUMAN.value)
+                    ):
+                        await broadcast_manager.broadcast_new_escalation(
+                            updated_conversation, handoff_reason
+                        )
+                    else:
+                        # Regular status update
+                        await broadcast_manager.broadcast_conversation_update(
+                            updated_conversation
+                        )
+                except Exception as e:
+                    # Don't fail the update if broadcast fails
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        f"Failed to broadcast conversation update: {e}",
+                        exc_info=True,
+                    )
+            
+            return updated_conversation
         except ClientError as e:
             raise RuntimeError(f"Failed to update conversation: {e}") from e
 
