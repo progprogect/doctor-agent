@@ -27,26 +27,28 @@ class SecretsManager:
         )
         self._cache: dict[str, str] = {}
 
-    async def get_secret(self, secret_name: str, use_cache: bool = True) -> str:
-        """Get secret value from Secrets Manager."""
-        if use_cache and secret_name in self._cache:
-            cached_value = self._cache[secret_name]
-            # Ensure cached value is clean (should never be JSON, but check just in case)
-            if isinstance(cached_value, str):
-                cached_value = cached_value.strip()
-                # If cached value is JSON, something went wrong - extract it
-                if cached_value.startswith('{') and cached_value.endswith('}'):
-                    try:
-                        parsed = json.loads(cached_value)
-                        if isinstance(parsed, dict):
-                            for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
-                                if key in parsed and isinstance(parsed[key], str):
-                                    cached_value = parsed[key].strip()
-                                    break
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Error parsing cached JSON: {e}")
-                        pass
-            return cached_value
+    async def get_secret(
+        self, 
+        secret_name: str, 
+        use_cache: bool = True,
+        json_key: Optional[str] = None
+    ) -> str:
+        """Get secret value from Secrets Manager.
+        
+        Args:
+            secret_name: Name of the secret in AWS Secrets Manager
+            use_cache: Whether to use cached value if available
+            json_key: If secret is JSON, extract value by this key. 
+                     If None, uses auto-detection for common keys.
+        
+        Returns:
+            Secret value as string. If JSON and json_key is provided, returns value at that key.
+        """
+        # Build cache key that includes json_key to avoid conflicts
+        cache_key = f"{secret_name}:{json_key}" if json_key else secret_name
+        
+        if use_cache and cache_key in self._cache:
+            return self._cache[cache_key]
 
         try:
             response = self.client.get_secret_value(SecretId=secret_name)
@@ -55,22 +57,37 @@ class SecretsManager:
             # Try to parse as JSON
             try:
                 secret_data = json.loads(secret_value)
-                # If it's a dict, extract the value by key
                 if isinstance(secret_data, dict):
-                    # Common pattern: {"api_key": "value"} or {"OPENAI_API_KEY": "value"}
-                    for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value"]:
-                        if key in secret_data:
-                            extracted_value = secret_data[key]
-                            # Ensure extracted value is a string
-                            if isinstance(extracted_value, str):
-                                secret_value = extracted_value
-                            elif isinstance(extracted_value, dict):
-                                # If it's still a dict, something is wrong - try to find string value
-                                for v in extracted_value.values():
-                                    if isinstance(v, str):
-                                        secret_value = v
-                                        break
-                            break
+                    # If json_key is specified, extract value by that key
+                    if json_key:
+                        if json_key not in secret_data:
+                            raise ValueError(
+                                f"Key '{json_key}' not found in secret {secret_name}. "
+                                f"Available keys: {list(secret_data.keys())}"
+                            )
+                        extracted_value = secret_data[json_key]
+                        if not isinstance(extracted_value, str):
+                            raise ValueError(
+                                f"Value at key '{json_key}' in secret {secret_name} is not a string. "
+                                f"Got: {type(extracted_value).__name__}"
+                            )
+                        secret_value = extracted_value
+                    else:
+                        # Auto-detect: try common keys for API keys
+                        for key in ["api_key", "OPENAI_API_KEY", "openai_api_key", "value", "access_token"]:
+                            if key in secret_data:
+                                extracted_value = secret_data[key]
+                                # Ensure extracted value is a string
+                                if isinstance(extracted_value, str):
+                                    secret_value = extracted_value
+                                    break
+                                elif isinstance(extracted_value, dict):
+                                    # If it's still a dict, try to find string value
+                                    for v in extracted_value.values():
+                                        if isinstance(v, str):
+                                            secret_value = v
+                                            break
+                                    break
             except json.JSONDecodeError:
                 # Not JSON, use as-is
                 pass
@@ -78,39 +95,38 @@ class SecretsManager:
             # Clean up whitespace
             secret_value = secret_value.strip().strip('"').strip("'")
             
-            # CRITICAL: Validate that we never cache a JSON string
-            # If secret_value still looks like JSON after extraction, something went wrong
+            # Validate that we extracted a string value (not JSON)
             if secret_value.startswith('{') and secret_value.endswith('}'):
                 # Last attempt: try to extract any string value from the JSON
                 try:
                     parsed = json.loads(secret_value)
                     if isinstance(parsed, dict):
-                        # Get the first string value we find that looks like an API key
+                        # Get the first string value we find
                         for v in parsed.values():
-                            if isinstance(v, str) and v.strip().startswith('sk-'):
+                            if isinstance(v, str):
                                 secret_value = v.strip()
                                 break
-                        # If still JSON, raise error - we should never cache this
+                        # If still JSON, raise error
                         if secret_value.startswith('{'):
-                            logger.error(f"Failed to extract secret value from JSON for {secret_name}")
                             raise ValueError(
-                                f"Failed to extract secret value from JSON for {secret_name}. "
-                                f"Got JSON string instead of plain value."
+                                f"Failed to extract string value from JSON secret {secret_name}. "
+                                f"Expected plain value or JSON with extractable string value. "
+                                f"Use json_key parameter to specify which key to extract."
                             )
                 except (json.JSONDecodeError, ValueError) as e:
-                    # If we can't extract or it's still JSON, don't cache it
                     logger.error(f"Error extracting from JSON: {e}")
                     raise ValueError(
                         f"Secret {secret_name} appears to be malformed JSON. "
-                        f"Expected plain value or JSON with extractable string value."
-                    )
+                        f"Expected plain value or JSON with extractable string value. "
+                        f"Use json_key parameter to specify which key to extract."
+                    ) from e
 
             # Final cleanup
             secret_value = secret_value.strip().strip('"').strip("'")
 
-            # Only cache if it's a clean string (not JSON)
-            if use_cache and not (secret_value.startswith('{') and secret_value.endswith('}')):
-                self._cache[secret_name] = secret_value
+            # Cache the extracted value
+            if use_cache:
+                self._cache[cache_key] = secret_value
 
             return secret_value
 
@@ -185,40 +201,22 @@ class SecretsManager:
             raise RuntimeError(f"Failed to create channel token secret: {e}") from e
 
     async def get_channel_token(self, secret_name: str) -> str:
-        """Get channel access token from secret."""
+        """Get channel access token from secret.
+        
+        Channel tokens are stored as JSON: {"access_token": "...", **metadata}
+        This method uses get_secret() with json_key="access_token" for consistency.
+        """
         try:
-            # Get secret directly from AWS Secrets Manager to avoid get_secret's JSON extraction logic
-            # Channel tokens are stored as {"access_token": "...", **metadata}
-            response = self.client.get_secret_value(SecretId=secret_name)
-            secret_value = response["SecretString"]
-            
-            # Try to parse as JSON (channel tokens are stored as JSON)
-            try:
-                data = json.loads(secret_value)
-                if isinstance(data, dict):
-                    # Extract access_token from JSON
-                    access_token = data.get("access_token")
-                    if access_token and isinstance(access_token, str):
-                        return access_token.strip()
-                    # If access_token not found, try to return the whole value as string
-                    logger.warning(f"access_token not found in secret {secret_name}, returning first string value")
-                    for v in data.values():
-                        if isinstance(v, str):
-                            return v.strip()
-            except json.JSONDecodeError:
-                # Not JSON, return as-is (for backward compatibility with plain token storage)
-                pass
-            
-            # If not JSON or access_token not found, return as-is
-            return secret_value.strip()
+            # Use get_secret with json_key parameter for consistent JSON extraction
+            return await self.get_secret(secret_name, use_cache=False, json_key="access_token")
+        except ValueError as e:
+            logger.error(f"Failed to get channel token from {secret_name}: {e}")
+            raise
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code == "ResourceNotFoundException":
                 raise ValueError(f"Secret {secret_name} not found") from e
             raise RuntimeError(f"Failed to retrieve channel token from {secret_name}: {e}") from e
-        except Exception as e:
-            logger.error(f"Failed to get channel token from {secret_name}: {e}")
-            raise ValueError(f"Failed to get channel token from {secret_name}: {e}") from e
 
     async def update_channel_token(
         self,
