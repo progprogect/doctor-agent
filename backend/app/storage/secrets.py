@@ -157,11 +157,30 @@ class SecretsManager:
         
         return api_key
 
-    def clear_cache(self, secret_name: Optional[str] = None) -> None:
-        """Clear cached secrets."""
+    def clear_cache(self, secret_name: Optional[str] = None, json_key: Optional[str] = None) -> None:
+        """Clear cached secrets.
+        
+        Args:
+            secret_name: If provided, clear cache for this secret only.
+                        If None, clear all cache.
+            json_key: If provided with secret_name, clear cache for specific json_key.
+                     If None with secret_name, clear all cache entries for that secret.
+        """
         if secret_name:
-            self._cache.pop(secret_name, None)
+            if json_key:
+                # Clear specific cache entry
+                cache_key = f"{secret_name}:{json_key}"
+                self._cache.pop(cache_key, None)
+            else:
+                # Clear all cache entries for this secret (with or without json_key)
+                keys_to_remove = [
+                    key for key in self._cache.keys()
+                    if key == secret_name or key.startswith(f"{secret_name}:")
+                ]
+                for key in keys_to_remove:
+                    self._cache.pop(key, None)
         else:
+            # Clear all cache
             self._cache.clear()
 
     async def create_channel_token_secret(
