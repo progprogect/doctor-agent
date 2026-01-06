@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Annotated, Optional, Union
 
-from pydantic import BeforeValidator, Field, field_validator, model_validator
+from pydantic import BeforeValidator, Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -109,51 +109,38 @@ class Settings(BaseSettings):
 
     # CORS
     # Use Optional[str] with explicit alias to prevent pydantic-settings from auto-parsing as JSON
-    # Then convert to list[str] in model_validator after initialization
+    # Then convert to list[str] using computed_field to prevent pydantic-settings from trying to parse it
     cors_origins_env: Optional[str] = Field(
         default=None,
         description="CORS origins from environment (will be parsed to list)",
         alias="CORS_ORIGINS",  # Explicit alias to map CORS_ORIGINS env var to this field
     )
     
-    # This field is computed from cors_origins_env in model_validator
-    # We use validation_alias to prevent pydantic-settings from trying to read CORS_ORIGINS for this field
-    cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:3000"], 
-        description="Allowed CORS origins",
-        validation_alias=None,  # Explicitly prevent reading from env
-        exclude=True,  # Exclude from model init, will be set in validator
-    )
-
-    @model_validator(mode="after")
-    def parse_cors_origins_after(self) -> "Settings":
-        """Parse CORS origins from environment string to list after model initialization.
+    @computed_field
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse CORS origins from environment string to list.
         
-        This validator runs after the model is initialized, allowing us to manually
-        parse the CORS_ORIGINS environment variable without pydantic-settings
-        attempting to parse it as JSON first.
+        This is a computed field, so pydantic-settings will not try to read it from environment.
         """
         import json
         
         v = self.cors_origins_env
         
         if v is None:
-            self.cors_origins = ["http://localhost:3000"]  # Default value
-            return self
+            return ["http://localhost:3000"]  # Default value
         
         # If it's a string, parse it
         if isinstance(v, str):
             # Handle empty string
             if not v.strip():
-                self.cors_origins = ["http://localhost:3000"]  # Default value
-                return self
+                return ["http://localhost:3000"]  # Default value
             
             # Try to parse as JSON first (in case it's a JSON string)
             try:
                 parsed = json.loads(v)
                 if isinstance(parsed, list):
-                    self.cors_origins = [str(item).strip() for item in parsed if str(item).strip()]
-                    return self
+                    return [str(item).strip() for item in parsed if str(item).strip()]
             except (json.JSONDecodeError, ValueError):
                 pass
             
@@ -161,14 +148,12 @@ class Settings(BaseSettings):
             origins = [origin.strip() for origin in v.split(",") if origin.strip()]
             # Handle wildcard
             if "*" in origins:
-                self.cors_origins = ["*"]
+                return ["*"]
             else:
-                self.cors_origins = origins if origins else ["http://localhost:3000"]  # Default value
-            return self
+                return origins if origins else ["http://localhost:3000"]  # Default value
         
         # Fallback to default
-        self.cors_origins = ["http://localhost:3000"]
-        return self
+        return ["http://localhost:3000"]
 
     # WebSocket
     websocket_ping_interval: int = Field(
