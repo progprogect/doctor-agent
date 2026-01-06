@@ -37,8 +37,16 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy built application
+# In standalone mode, Next.js creates a self-contained app in .next/standalone
+# The standalone directory already contains the necessary structure
+# We need to copy public files and ensure static files are in the right place
 COPY --from=builder /app/public ./public
+
+# Copy standalone output (contains server.js and node_modules)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+
+# Copy static files to the correct location inside standalone
+# In standalone mode, static files should be at .next/static relative to server.js
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
