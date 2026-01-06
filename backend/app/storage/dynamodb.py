@@ -188,7 +188,7 @@ class DynamoDBClient:
                 Key={"conversation_id": conversation_id},
                 UpdateExpression=f"SET {', '.join(update_expression_parts)}",
                 ExpressionAttributeValues=expression_attribute_values,
-                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else None,
+                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else {},
                 ReturnValues="ALL_NEW",
             )
             updated_conversation = await self.get_conversation(conversation_id)
@@ -264,8 +264,8 @@ class DynamoDBClient:
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
-            if expression_attribute_names:
-                scan_kwargs["ExpressionAttributeNames"] = expression_attribute_names
+            # ExpressionAttributeNames is required when FilterExpression is used
+            scan_kwargs["ExpressionAttributeNames"] = expression_attribute_names if expression_attribute_names else {}
 
         response = self.tables["conversations"].scan(**scan_kwargs)
         items = response.get("Items", [])
@@ -605,7 +605,7 @@ class DynamoDBClient:
                 Key={"binding_id": binding_id},
                 UpdateExpression=f"SET {', '.join(update_expression_parts)}",
                 ExpressionAttributeValues=expression_attribute_values,
-                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else None,
+                ExpressionAttributeNames=expression_attribute_names if expression_attribute_names else {},
                 ReturnValues="ALL_NEW",
             )
             return await self.get_channel_binding(binding_id)
