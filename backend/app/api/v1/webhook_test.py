@@ -28,8 +28,7 @@ async def simulate_instagram_webhook(
         logger.info("="*80)
         logger.info(f"Full payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
         
-        # Forward to Instagram webhook handler
-        from app.api.v1.instagram import handle_webhook
+        # Forward to Instagram service directly
         from app.services.instagram_service import InstagramService
         from app.services.channel_binding_service import ChannelBindingService
         from app.storage.secrets import get_secrets_manager
@@ -40,22 +39,10 @@ async def simulate_instagram_webhook(
         binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
         instagram_service = InstagramService(binding_service, deps.dynamodb, settings)
         
-        # Create a mock request with the payload
-        class MockRequest:
-            def __init__(self, body_bytes: bytes):
-                self._body = body_bytes
-            
-            async def body(self):
-                return self._body
+        # Process webhook event
+        await instagram_service.handle_webhook_event(payload)
         
-        mock_request = MockRequest(body)
-        
-        # Call webhook handler
-        result = await handle_webhook(
-            request=mock_request,
-            instagram_service=instagram_service,
-            x_hub_signature_256=None,  # Skip signature verification for test
-        )
+        result = {"status": "ok"}
         
         return {
             "status": "ok",
