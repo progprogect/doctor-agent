@@ -13,6 +13,7 @@ const navigation = [
   { name: "Conversations", href: "/admin/conversations", icon: "💬" },
   { name: "Audit", href: "/admin/audit", icon: "📋" },
   { name: "Stats", href: "/admin/stats", icon: "📊" },
+  { name: "Instagram Test", href: "/admin/instagram-test", icon: "🧪" },
 ];
 
 export const Sidebar: React.FC = () => {
