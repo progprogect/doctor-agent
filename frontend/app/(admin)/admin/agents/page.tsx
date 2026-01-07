@@ -32,7 +32,8 @@ function AgentRow({
 
   const loadChannelCount = async () => {
     try {
-      const bindings = await api.listChannelBindings(agent.agent_id, undefined, false);
+      // Count only active channels to match what's shown on the channels page
+      const bindings = await api.listChannelBindings(agent.agent_id, undefined, true);
       setChannelCount(bindings.length);
     } catch (err) {
       setChannelCount(0);
