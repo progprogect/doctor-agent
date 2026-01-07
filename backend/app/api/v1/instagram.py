@@ -41,9 +41,10 @@ async def verify_webhook(
     - hub.verify_token=<your_token>
     - hub.challenge=<random_string>
     
-    Server MUST return HTTP 200 with challenge string as response body.
+    Server MUST return HTTP 200 with challenge string as plain text response body.
+    Instagram requires EXACT challenge string, nothing else.
     """
-    logger.info(f"Webhook verification request: mode={mode}, token={'*' * len(token) if token else None}")
+    logger.info(f"Webhook verification request: mode={mode}, token={'*' * len(token) if token else None}, challenge={challenge}")
     
     result = instagram_service.verify_webhook(mode=mode, token=token, challenge=challenge)
     if result is None:
@@ -54,10 +55,10 @@ async def verify_webhook(
         )
     
     logger.info(f"Webhook verification successful, returning challenge: {challenge}")
-    # IMPORTANT: Return challenge as plain string (not JSON)
-    # Meta requires HTTP 200 with challenge string as response body
-    from fastapi.responses import Response
-    return Response(content=result, media_type="text/plain", status_code=200)
+    # CRITICAL: Instagram requires EXACT challenge string as plain text
+    # Must return HTTP 200 with challenge string ONLY (no JSON, no extra content)
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(content=challenge, status_code=200)
 
 
 @router.post("/instagram/webhook")
