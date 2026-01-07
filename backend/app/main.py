@@ -19,7 +19,7 @@ from app.api.middleware import (
 from app.config import get_settings
 from app.utils.logging_config import setup_logging, get_logger
 from app.api.v1 import chat, agents, admin, channel_bindings, instagram
-from app.api.v1 import instagram_test, debug
+from app.api.v1 import instagram_test, debug, webhook_test
 from app.api import websocket, admin_websocket
 
 # Setup logging
@@ -208,6 +208,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
     app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
     app.include_router(instagram_test.router, prefix="/api/v1", tags=["instagram-test"])
+    app.include_router(webhook_test.router, prefix="/api/v1", tags=["webhook-test"])
 
     # WebSocket routes
     app.include_router(websocket.router, tags=["websocket"])
