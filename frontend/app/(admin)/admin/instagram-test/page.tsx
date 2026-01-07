@@ -117,11 +117,25 @@ export default function InstagramTestPage() {
   const loadRecentWebhooks = async () => {
     try {
       addLog("info", "Загрузка последних webhook событий...");
-      const response = await fetch("/api/v1/debug/recent-instagram-conversations");
+      // Загружаем реальные webhook события
+      const response = await fetch("/api/v1/webhook-events/recent?limit=20");
       if (response.ok) {
         const data = await response.json();
-        setRecentWebhooks(data.conversations || []);
-        addLog("success", `Загружено ${data.conversations?.length || 0} диалогов`);
+        const events = data.events || [];
+        setRecentWebhooks(events);
+        addLog("success", `Загружено ${events.length} webhook событий`);
+        
+        // Показываем последние события в логах
+        if (events.length > 0) {
+          events.slice(-3).forEach((event: any) => {
+            addLog("info", `📨 Webhook: ${event.type} в ${new Date(event.timestamp).toLocaleTimeString()}`, {
+              sender_id: event.payload?.entry?.[0]?.messaging?.[0]?.sender?.id,
+              message_text: event.payload?.entry?.[0]?.messaging?.[0]?.message?.text,
+            });
+          });
+        }
+      } else {
+        addLog("error", "Ошибка загрузки webhook событий", await response.text());
       }
     } catch (error: any) {
       addLog("error", "Ошибка загрузки webhook событий", error.message);
@@ -131,6 +145,13 @@ export default function InstagramTestPage() {
   useEffect(() => {
     addLog("info", "Страница тестирования Instagram API загружена");
     loadRecentWebhooks();
+    
+    // Обновляем webhook события каждые 5 секунд
+    const interval = setInterval(() => {
+      loadRecentWebhooks();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const getLogColor = (level: LogEntry["level"]) => {
@@ -217,30 +238,64 @@ export default function InstagramTestPage() {
           {/* Последние webhook события */}
           {recentWebhooks.length > 0 && (
             <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 p-6">
-              <h2 className="text-lg font-semibold mb-4">
-                Последние диалоги ({recentWebhooks.length})
-              </h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">
+                  Последние webhook события ({recentWebhooks.length})
+                </h2>
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      const response = await fetch("/api/v1/webhook-events/clear", {
+                        method: "POST",
+                      });
+                      if (response.ok) {
+                        addLog("success", "Webhook события очищены");
+                        loadRecentWebhooks();
+                      }
+                    } catch (error: any) {
+                      addLog("error", "Ошибка очистки событий", error.message);
+                    }
+                  }}
+                  className="text-sm"
+                >
+                  Очистить
+                </Button>
+              </div>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {recentWebhooks.map((conv, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 bg-gray-50 rounded border text-sm"
-                  >
-                    <div className="font-medium">
-                      External User ID: {conv.external_user_id || "N/A"}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Status: {conv.status} | Updated:{" "}
-                      {new Date(conv.updated_at).toLocaleString()}
-                    </div>
-                    {conv.messages && conv.messages.length > 0 && (
-                      <div className="mt-2 text-xs">
-                        Последнее: [{conv.messages[0].role}]{" "}
-                        {conv.messages[0].content}
+                {recentWebhooks.slice().reverse().map((event: any, idx: number) => {
+                  const messaging = event.payload?.entry?.[0]?.messaging?.[0];
+                  const sender = messaging?.sender;
+                  const recipient = messaging?.recipient;
+                  const message = messaging?.message;
+                  
+                  return (
+                    <div
+                      key={event.id || idx}
+                      className="p-3 bg-gray-50 rounded border text-sm"
+                    >
+                      <div className="font-medium text-xs text-gray-600 mb-1">
+                        {new Date(event.timestamp).toLocaleString()}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="font-medium">
+                        Sender ID: {sender?.id || "N/A"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Recipient ID: {recipient?.id || "N/A"}
+                      </div>
+                      {message?.text && (
+                        <div className="mt-2 text-xs bg-white p-2 rounded">
+                          <strong>Сообщение:</strong> {message.text}
+                        </div>
+                      )}
+                      {message?.is_self && message?.is_echo && (
+                        <div className="mt-1 text-xs text-blue-600 font-medium">
+                          🎯 Self Messaging Event
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

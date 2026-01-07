@@ -89,6 +89,10 @@ async def handle_webhook(
 
         payload = json.loads(body.decode("utf-8"))
         
+        # Сохраняем событие для тестовой страницы
+        from app.services.webhook_event_store import add_webhook_event
+        add_webhook_event("instagram_webhook", payload)
+        
         # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для отладки - выводим всю структуру события
         logger.info("="*80)
         logger.info("📨 INSTAGRAM WEBHOOK EVENT RECEIVED")
