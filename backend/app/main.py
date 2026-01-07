@@ -18,8 +18,8 @@ from app.api.middleware import (
 )
 from app.config import get_settings
 from app.utils.logging_config import setup_logging, get_logger
-from app.api.v1 import chat, agents, admin, channel_bindings, instagram, instagram_test
-from app.api.v1 import debug
+from app.api.v1 import chat, agents, admin, channel_bindings, instagram
+from app.api.v1 import instagram_test, debug
 from app.api import websocket, admin_websocket
 
 # Setup logging
