@@ -387,11 +387,15 @@ class DynamoDBClient:
                 [("is_active", "=", ":active")],
                 {":active": True},
             )
-            response = self.tables["agents"].scan(
-                FilterExpression=filter_expr,
-                ExpressionAttributeValues=attr_values,
-                ExpressionAttributeNames=attr_names,
-            )
+            scan_kwargs = {
+                "FilterExpression": filter_expr,
+                "ExpressionAttributeValues": attr_values,
+            }
+            # Only include ExpressionAttributeNames if it's not empty
+            # DynamoDB doesn't accept empty ExpressionAttributeNames
+            if attr_names:
+                scan_kwargs["ExpressionAttributeNames"] = attr_names
+            response = self.tables["agents"].scan(**scan_kwargs)
         else:
             response = self.tables["agents"].scan()
         return response.get("Items", [])
