@@ -34,6 +34,14 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -131,16 +139,23 @@ resource "aws_security_group_rule" "alb_to_frontend" {
   description              = "Allow ALB to access Frontend"
 }
 
-# HTTP Listener - Default action forwards to frontend
+# HTTP Listener - Redirects to HTTPS (if HTTPS listener exists)
+# If HTTPS is not configured, forwards to frontend
 resource "aws_lb_listener" "frontend" {
   count             = var.enable_alb ? 1 : 0
   load_balancer_arn = aws_lb.main[0].arn
   port              = "80"
   protocol          = "HTTP"
 
+  # Redirect HTTP to HTTPS if HTTPS listener exists
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend[0].arn
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
