@@ -19,12 +19,27 @@ import type {
 
 // Use relative URL when running on same domain (via ALB), fallback to env var or localhost
 // Force HTTPS if NEXT_PUBLIC_API_URL is set, otherwise use window.location.origin
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL
-    ? process.env.NEXT_PUBLIC_API_URL
-    : typeof window !== "undefined" && window.location.origin
-    ? window.location.origin
-    : "http://localhost:8000";
+// If window.location.origin is HTTP but page is HTTPS, force HTTPS
+const getApiBaseUrl = () => {
+  // Priority 1: Use NEXT_PUBLIC_API_URL if set (embedded during build)
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // Priority 2: Use window.location.origin if available
+  if (typeof window !== "undefined" && window.location.origin) {
+    // If page is HTTPS but origin is HTTP (shouldn't happen, but safety check)
+    if (window.location.protocol === "https:" && window.location.origin.startsWith("http://")) {
+      return window.location.origin.replace("http://", "https://");
+    }
+    return window.location.origin;
+  }
+  
+  // Fallback: localhost for development
+  return "http://localhost:8000";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 class ApiError extends Error {
   constructor(
