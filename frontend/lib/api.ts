@@ -26,12 +26,17 @@ const getApiBaseUrl = () => {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   
-  // Priority 2: Use window.location.origin if available
-  if (typeof window !== "undefined" && window.location.origin) {
-    // If page is HTTPS but origin is HTTP (shouldn't happen, but safety check)
-    if (window.location.protocol === "https:" && window.location.origin.startsWith("http://")) {
-      return window.location.origin.replace("http://", "https://");
+  // Priority 2: Use window.location.origin if available, but force HTTPS if page is HTTPS
+  if (typeof window !== "undefined") {
+    const isHttps = window.location.protocol === "https:";
+    const host = window.location.host;
+    
+    // Always use HTTPS if page is loaded over HTTPS
+    if (isHttps) {
+      return `https://${host}`;
     }
+    
+    // Use origin as-is for HTTP (development)
     return window.location.origin;
   }
   
