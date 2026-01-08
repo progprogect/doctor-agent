@@ -122,6 +122,8 @@ jobs:
               --platform linux/amd64 \
               --cache-from $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest \
               --build-arg BUILDKIT_INLINE_CACHE=1 \
+              --build-arg NEXT_PUBLIC_API_URL=https://agents.elemental.ae \
+              --build-arg NEXT_PUBLIC_WS_URL=wss://agents.elemental.ae \
               -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG \
               .
           else
