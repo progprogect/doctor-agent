@@ -18,10 +18,13 @@ import type {
 } from "./types/channel";
 
 // Use relative URL when running on same domain (via ALB), fallback to env var or localhost
+// Force HTTPS if NEXT_PUBLIC_API_URL is set, otherwise use window.location.origin
 const API_BASE_URL =
-  typeof window !== "undefined" && window.location.origin
+  process.env.NEXT_PUBLIC_API_URL
+    ? process.env.NEXT_PUBLIC_API_URL
+    : typeof window !== "undefined" && window.location.origin
     ? window.location.origin
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    : "http://localhost:8000";
 
 class ApiError extends Error {
   constructor(
