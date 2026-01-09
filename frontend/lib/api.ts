@@ -20,8 +20,10 @@ import type {
 // Use relative URLs when running on same domain (via ALB)
 // This automatically uses the same protocol (HTTP/HTTPS) as the page
 // Fallback to absolute URL only for development (localhost)
-const getApiBaseUrl = () => {
-  // If running on same domain (production), use empty string for relative URLs
+// IMPORTANT: This function must be called at runtime, not at module load time
+// because in Next.js SSR, window is not available during module initialization
+const getApiBaseUrl = (): string => {
+  // If running in browser (client-side), use relative URLs for production
   if (typeof window !== "undefined" && window.location) {
     const host = window.location.host;
     // If not localhost, use relative URLs (empty string)
@@ -31,6 +33,7 @@ const getApiBaseUrl = () => {
   }
   
   // Fallback: Use NEXT_PUBLIC_API_URL if set (for development or custom domains)
+  // This is available both on server and client in Next.js
   if (typeof process !== "undefined" && process.env && process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
@@ -38,9 +41,6 @@ const getApiBaseUrl = () => {
   // Fallback: localhost for development
   return "http://localhost:8000";
 };
-
-// Calculate API_BASE_URL once at module load time
-const API_BASE_URL = getApiBaseUrl();
 
 class ApiError extends Error {
   constructor(
@@ -59,6 +59,9 @@ async function request<T>(
   options: RequestInit = {},
   requireAuth: boolean = false
 ): Promise<T> {
+  // Calculate API_BASE_URL dynamically at request time, not at module load time
+  // This ensures window.location is available when running in the browser
+  const API_BASE_URL = getApiBaseUrl();
   const url = `${API_BASE_URL}${endpoint}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
