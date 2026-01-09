@@ -26,24 +26,27 @@ const getApiBaseUrl = () => {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   
-  // Priority 2: Use window.location.origin if available, but force HTTPS if page is HTTPS
-  if (typeof window !== "undefined") {
-    const isHttps = window.location.protocol === "https:";
+  // Priority 2: Use window.location if available, but force HTTPS if page is HTTPS
+  if (typeof window !== "undefined" && window.location) {
+    const protocol = window.location.protocol;
     const host = window.location.host;
     
     // Always use HTTPS if page is loaded over HTTPS
-    if (isHttps) {
+    if (protocol === "https:") {
       return `https://${host}`;
     }
     
     // Use origin as-is for HTTP (development)
-    return window.location.origin;
+    if (protocol === "http:") {
+      return `http://${host}`;
+    }
   }
   
   // Fallback: localhost for development
   return "http://localhost:8000";
 };
 
+// Calculate API_BASE_URL once at module load time
 const API_BASE_URL = getApiBaseUrl();
 
 class ApiError extends Error {
