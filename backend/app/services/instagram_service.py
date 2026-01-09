@@ -402,3 +402,93 @@ class InstagramService:
         )
         return True
 
+    async def get_message_sender_from_api(
+        self, account_id: str, message_id: str
+    ) -> Optional[str]:
+        """
+        Попытка получить sender_id из сообщения через Graph API.
+        
+        Использует conversations endpoint для поиска сообщения по message_id.
+        """
+        try:
+            # Получаем access token из binding по account_id
+            binding = await self.channel_binding_service.get_binding_by_account_id(
+                channel_type=ChannelType.INSTAGRAM.value, account_id=account_id
+            )
+            
+            if not binding:
+                logger.warning(f"Binding not found for account_id: {account_id}")
+                return None
+            
+            if not binding.is_active:
+                logger.warning(f"Binding is not active for account_id: {account_id}")
+                return None
+            
+            access_token = await self.channel_binding_service.get_access_token(binding.binding_id)
+            
+            # Пробуем получить conversations
+            # Используем реальный Instagram Account ID из binding, а не Page ID
+            instagram_account_id = binding.channel_account_id
+            
+            # Пробуем несколько вариантов endpoints
+            endpoints_to_try = [
+                f"{self.GRAPH_API_BASE_URL}/{instagram_account_id}/conversations?fields=id,participants,messages",
+                f"{self.GRAPH_API_BASE_URL}/{instagram_account_id}/conversations",
+                f"{self.GRAPH_API_BASE_URL}/{account_id}/conversations?fields=id,participants,messages",
+                f"{self.GRAPH_API_BASE_URL}/{account_id}/conversations",
+            ]
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                for endpoint in endpoints_to_try:
+                    try:
+                        response = await client.get(
+                            endpoint,
+                            headers={"Authorization": f"Bearer {access_token}"},
+                        )
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            conversations = data.get("data", [])
+                            
+                            logger.info(f"Found {len(conversations)} conversations via {endpoint}")
+                            
+                            # Ищем сообщение в conversations
+                            for conversation in conversations:
+                                conv_id = conversation.get("id")
+                                if not conv_id:
+                                    continue
+                                
+                                # Получаем messages из conversation
+                                messages_url = f"{self.GRAPH_API_BASE_URL}/{conv_id}/messages?fields=id,from,to,message"
+                                messages_response = await client.get(
+                                    messages_url,
+                                    headers={"Authorization": f"Bearer {access_token}"},
+                                )
+                                
+                                if messages_response.status_code == 200:
+                                    messages_data = messages_response.json()
+                                    messages = messages_data.get("data", [])
+                                    
+                                    # Ищем сообщение с нужным message_id
+                                    for msg in messages:
+                                        if msg.get("id") == message_id:
+                                            sender_info = msg.get("from", {})
+                                            sender_id = sender_info.get("id")
+                                            if sender_id:
+                                                logger.info(f"Found sender_id {sender_id} for message_id {message_id[:50]}...")
+                                                return sender_id
+                                    
+                                    logger.debug(f"Message {message_id[:50]}... not found in conversation {conv_id}")
+                        else:
+                            logger.debug(f"Endpoint {endpoint} returned status {response.status_code}")
+                    except Exception as e:
+                        logger.debug(f"Error trying endpoint {endpoint}: {e}")
+                        continue
+            
+            logger.warning(f"Could not find sender_id for message_id {message_id[:50]}... via Graph API")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting message sender from API: {e}", exc_info=True)
+            return None
+

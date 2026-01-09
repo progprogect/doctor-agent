@@ -105,16 +105,9 @@ async def handle_webhook(
         for entry in entries:
             messaging = entry.get("messaging", [])
             for event in messaging:
-                # Определяем тип события
-                event_type = "unknown"
-                if "message" in event:
-                    event_type = "message"
-                elif "message_edit" in event:
-                    event_type = "message_edit"
-                elif "message_reaction" in event:
-                    event_type = "message_reaction"
-                elif "message_unsend" in event:
-                    event_type = "message_unsend"
+                # Используем правильный метод из сервиса для определения типа события
+                # Он проверяет sender/recipient первыми, что важно для корректной обработки
+                event_type = instagram_service._get_event_type(event)
                 
                 logger.info("-"*80)
                 logger.info(f"🔹 Тип события: {event_type}")
@@ -137,18 +130,6 @@ async def handle_webhook(
                     logger.info(f"🔹 Message Text: {message_text}")
                     logger.info(f"🔹 Is Self: {is_self}")
                     logger.info(f"🔹 Is Echo: {is_echo}")
-                elif event_type == "message_edit":
-                    edit_data = event.get("message_edit", {})
-                    num_edit = edit_data.get("num_edit", -1)
-                    mid = edit_data.get("mid", "unknown")
-                    entry_id = entry.get("id")
-                    
-                    logger.warning(f"⚠️  message_edit событие (num_edit={num_edit})")
-                    logger.warning(f"   Это известное поведение Instagram API - они отправляют message_edit с num_edit=0 для новых сообщений")
-                    logger.warning(f"   В этом событии НЕТ sender/recipient ID, поэтому мы не можем отправить ответ")
-                    logger.info(f"   Message ID: {mid[:50]}...")
-                    logger.info(f"   Entry ID (Account ID): {entry_id}")
-                    logger.info(f"   💡 Instagram может отправить отдельное 'message' событие позже с sender/recipient ID")
                     
                     if is_self and is_echo:
                         logger.info("="*80)
@@ -165,12 +146,42 @@ async def handle_webhook(
                         logger.info(f"✅ НАЙДЕН RECIPIENT_ID: {sender_id}")
                         logger.info(f"   Используйте этот ID для отправки сообщения:")
                         logger.info(f"   python3 test_instagram_send.py {sender_id}")
+                        
+                elif event_type == "message_edit":
+                    edit_data = event.get("message_edit", {})
+                    num_edit = edit_data.get("num_edit", -1)
+                    mid = edit_data.get("mid", "unknown")
+                    entry_id = entry.get("id")  # Это Instagram Business Account ID (Page ID)
+                    
+                    logger.warning(f"⚠️  message_edit событие (num_edit={num_edit})")
+                    logger.warning(f"   Это известное поведение Instagram API - они отправляют message_edit с num_edit=0 для новых сообщений")
+                    logger.warning(f"   В этом событии НЕТ sender/recipient ID, поэтому мы не можем отправить ответ")
+                    logger.info(f"   Message ID: {mid[:50]}...")
+                    logger.info(f"   Entry ID (Page ID): {entry_id}")
+                    logger.info(f"   💡 Пытаемся получить sender_id через Graph API...")
+                    
+                    # Попытка получить информацию о сообщении через Graph API
+                    if entry_id and num_edit == 0 and mid:
+                        try:
+                            sender_id_from_api = await instagram_service.get_message_sender_from_api(
+                                account_id=entry_id,
+                                message_id=mid
+                            )
+                            if sender_id_from_api:
+                                logger.info(f"✅ УСПЕХ! Получен Sender ID через Graph API: {sender_id_from_api}")
+                                logger.info(f"   Теперь можно отправить ответ пользователю")
+                            else:
+                                logger.warning(f"⚠️  Не удалось получить Sender ID через Graph API")
+                                logger.info(f"   Instagram может отправить отдельное 'message' событие позже с sender/recipient ID")
+                        except Exception as e:
+                            logger.warning(f"⚠️  Ошибка при попытке получить Sender ID через Graph API: {e}")
+                            logger.info(f"   Instagram может отправить отдельное 'message' событие позже с sender/recipient ID")
+                    else:
+                        logger.info(f"   Instagram может отправить отдельное 'message' событие позже с sender/recipient ID")
+                        
                 else:
                     logger.info(f"⚠️  Событие типа '{event_type}' не содержит sender/recipient ID")
                     logger.info(f"   Для отправки ответа нужно обычное сообщение (event_type='message')")
-                    if event_type == "message_edit":
-                        edit_data = event.get("message_edit", {})
-                        logger.info(f"   Message ID: {edit_data.get('mid', 'N/A')}")
                 
                 logger.info("-"*80)
         

@@ -148,7 +148,7 @@ export default function InstagramTestPage() {
                 sender_id: senderId || "N/A",
                 message_text: messageText,
                 note: "⚠️ Sender ID не найден - проверьте полный payload",
-              });
+            });
             }
           });
         }
@@ -315,8 +315,8 @@ export default function InstagramTestPage() {
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div className="font-medium text-xs text-gray-600">
-                          {new Date(event.timestamp).toLocaleString()}
-                        </div>
+                        {new Date(event.timestamp).toLocaleString()}
+                      </div>
                         <div className="flex gap-1">
                           {senderId && (
                             <button
@@ -367,7 +367,7 @@ export default function InstagramTestPage() {
                               )}
                             </div>
                           )}
-                        </div>
+                      </div>
                       )}
                       
                       {isEcho && (
