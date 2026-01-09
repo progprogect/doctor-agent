@@ -23,22 +23,26 @@ import type {
 // IMPORTANT: This function must be called at runtime, not at module load time
 // because in Next.js SSR, window is not available during module initialization
 const getApiBaseUrl = (): string => {
-  // If running in browser (client-side), use relative URLs for production
+  // CRITICAL: If running in browser (client-side), ALWAYS use relative URLs for production
+  // This ensures the same protocol (HTTPS) as the page, preventing Mixed Content errors
   if (typeof window !== "undefined" && window.location) {
     const host = window.location.host;
-    // If not localhost, use relative URLs (empty string)
+    // If not localhost, ALWAYS use relative URLs (empty string)
+    // Ignore NEXT_PUBLIC_API_URL in browser to prevent Mixed Content issues
     if (host !== "localhost:3000" && !host.startsWith("localhost:")) {
-      return ""; // Relative URL - uses same protocol as page
+      return ""; // Relative URL - uses same protocol as page (HTTPS if page is HTTPS)
     }
+    // For localhost development, use HTTP localhost
+    return "http://localhost:8000";
   }
   
-  // Fallback: Use NEXT_PUBLIC_API_URL if set (for development or custom domains)
-  // This is available both on server and client in Next.js
+  // Server-side rendering: Use NEXT_PUBLIC_API_URL if set
+  // This is only used during SSR, not in the browser
   if (typeof process !== "undefined" && process.env && process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   
-  // Fallback: localhost for development
+  // Final fallback: localhost for development
   return "http://localhost:8000";
 };
 
