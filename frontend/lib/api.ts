@@ -36,8 +36,18 @@ const getApiBaseUrl = (): string => {
     return "http://localhost:8000";
   }
   
-  // Server-side rendering: Use NEXT_PUBLIC_API_URL if set
-  // This is only used during SSR, not in the browser
+  // Server-side rendering: In production, use relative URLs to avoid Mixed Content
+  // Next.js will resolve relative URLs using the same protocol as the incoming request
+  // This prevents SSR from making HTTP requests when the page is served over HTTPS
+  const isProduction = process.env.NODE_ENV === "production";
+  
+  if (isProduction) {
+    // In production SSR, use relative URL (empty string)
+    // Next.js will use the same protocol as the request (HTTPS)
+    return "";
+  }
+  
+  // Development SSR: Use NEXT_PUBLIC_API_URL if set, otherwise localhost
   if (typeof process !== "undefined" && process.env && process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }

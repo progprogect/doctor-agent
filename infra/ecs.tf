@@ -51,7 +51,7 @@ resource "aws_ecs_task_definition" "backend" {
         },
         {
           name  = "CORS_ORIGINS"
-          value = var.enable_alb ? "http://${aws_lb.main[0].dns_name},https://${aws_lb.main[0].dns_name}" : "*"
+          value = var.enable_alb ? "https://${aws_lb.main[0].dns_name},https://agents.elemental.ae" : "*"
         },
         {
           name  = "DYNAMODB_TABLE_AGENTS"
@@ -108,6 +108,10 @@ resource "aws_ecs_task_definition" "backend" {
         {
           name      = "OPENAI_API_KEY"
           valueFrom = aws_secretsmanager_secret.openai.arn
+        },
+        {
+          name      = "INSTAGRAM_WEBHOOK_VERIFY_TOKEN"
+          valueFrom = aws_secretsmanager_secret.instagram_webhook_verify_token.arn
         }
       ]
 
@@ -171,6 +175,14 @@ resource "aws_ecs_service" "backend" {
 resource "aws_secretsmanager_secret" "opensearch" {
   name        = "doctor-agent/opensearch"
   description = "OpenSearch master password for Doctor Agent"
+
+  tags = local.common_tags
+}
+
+# Secrets Manager secret for Instagram webhook verify token
+resource "aws_secretsmanager_secret" "instagram_webhook_verify_token" {
+  name        = "doctor-agent/instagram-webhook-verify-token"
+  description = "Instagram webhook verification token for Doctor Agent"
 
   tags = local.common_tags
 }

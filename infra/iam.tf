@@ -54,7 +54,8 @@ resource "aws_iam_role_policy" "ecs_execution" {
         ]
         Resource = [
           aws_secretsmanager_secret.openai.arn,
-          aws_secretsmanager_secret.opensearch.arn
+          aws_secretsmanager_secret.opensearch.arn,
+          aws_secretsmanager_secret.instagram_webhook_verify_token.arn
         ]
       }
     ]

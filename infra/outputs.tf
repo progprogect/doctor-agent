@@ -43,6 +43,11 @@ output "opensearch_secret_arn" {
   value       = aws_secretsmanager_secret.opensearch.arn
 }
 
+output "instagram_webhook_verify_token_secret_arn" {
+  description = "ARN of Instagram webhook verify token secret"
+  value       = aws_secretsmanager_secret.instagram_webhook_verify_token.arn
+}
+
 output "ecr_repository_url" {
   description = "ECR repository URL"
   value       = aws_ecr_repository.backend.repository_url

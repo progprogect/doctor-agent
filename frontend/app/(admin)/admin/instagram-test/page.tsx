@@ -128,10 +128,28 @@ export default function InstagramTestPage() {
         // Показываем последние события в логах
         if (events.length > 0) {
           events.slice(-3).forEach((event: any) => {
-            addLog("info", `📨 Webhook: ${event.type} в ${new Date(event.timestamp).toLocaleTimeString()}`, {
-              sender_id: event.payload?.entry?.[0]?.messaging?.[0]?.sender?.id,
-              message_text: event.payload?.entry?.[0]?.messaging?.[0]?.message?.text,
-            });
+            const extracted = event.extracted || {};
+            const senderId = extracted.sender_id || event.payload?.entry?.[0]?.messaging?.[0]?.sender?.id;
+            const messageText = extracted.message_text || event.payload?.entry?.[0]?.messaging?.[0]?.message?.text;
+            const isEcho = extracted.is_echo ?? event.payload?.entry?.[0]?.messaging?.[0]?.message?.is_echo ?? false;
+            
+            if (senderId && !isEcho) {
+              addLog("success", `📨 Webhook: ${event.type} в ${new Date(event.timestamp).toLocaleTimeString()}`, {
+                sender_id: senderId,
+                message_text: messageText,
+                note: "💡 sender_id - это recipient_id для отправки ответа!",
+              });
+            } else if (isEcho) {
+              addLog("info", `📨 Webhook (Echo): ${event.type} в ${new Date(event.timestamp).toLocaleTimeString()} - игнорируется`, {
+                note: "Это сообщение было отправлено агентом, поэтому игнорируется",
+              });
+            } else {
+              addLog("warning", `📨 Webhook: ${event.type} в ${new Date(event.timestamp).toLocaleTimeString()}`, {
+                sender_id: senderId || "N/A",
+                message_text: messageText,
+                note: "⚠️ Sender ID не найден - проверьте полный payload",
+              });
+            }
           });
         }
       } else {
@@ -262,36 +280,115 @@ export default function InstagramTestPage() {
                   Очистить
                 </Button>
               </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+              <div className="space-y-2 max-h-96 overflow-y-auto">
                 {recentWebhooks.slice().reverse().map((event: any, idx: number) => {
-                  const messaging = event.payload?.entry?.[0]?.messaging?.[0];
+                  // Используем извлеченную информацию если есть, иначе парсим payload
+                  const extracted = event.extracted || {};
+                  const entry = event.payload?.entry?.[0];
+                  const messaging = entry?.messaging?.[0];
                   const sender = messaging?.sender;
                   const recipient = messaging?.recipient;
                   const message = messaging?.message;
+                  
+                  // Извлекаем ID для отправки ответа (приоритет извлеченной информации)
+                  const senderId = extracted.sender_id || sender?.id;
+                  const recipientId = extracted.recipient_id || recipient?.id;
+                  const messageText = extracted.message_text || message?.text;
+                  const isEcho = extracted.is_echo ?? message?.is_echo ?? false;
+                  const isSelf = extracted.is_self ?? message?.is_self ?? false;
+                  
+                  // Для отладки - показываем полный payload если ID не найдены
+                  const showFullPayload = !senderId && !recipientId;
                   
                   return (
                     <div
                       key={event.id || idx}
                       className="p-3 bg-gray-50 rounded border text-sm"
                     >
-                      <div className="font-medium text-xs text-gray-600 mb-1">
-                        {new Date(event.timestamp).toLocaleString()}
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-medium text-xs text-gray-600">
+                          {new Date(event.timestamp).toLocaleString()}
+                        </div>
+                        <div className="flex gap-1">
+                          {senderId && (
+                            <button
+                              onClick={() => {
+                                setRecipientId(senderId);
+                                addLog("success", `Recipient ID заполнен из webhook: ${senderId}`);
+                              }}
+                              className="text-xs bg-[#D4AF37] text-white px-2 py-1 rounded hover:bg-[#B8860B] transition-colors"
+                              title="Использовать Sender ID как Recipient ID для отправки ответа"
+                            >
+                              Использовать Sender ID
+                            </button>
+                          )}
+                          {recipientId && (
+                            <button
+                              onClick={() => {
+                                setAccountId(recipientId);
+                                addLog("success", `Account ID заполнен из webhook: ${recipientId}`);
+                              }}
+                              className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 transition-colors"
+                              title="Использовать Recipient ID как Account ID"
+                            >
+                              Использовать Account ID
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="font-medium">
-                        Sender ID: {sender?.id || "N/A"}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Recipient ID: {recipient?.id || "N/A"}
-                      </div>
-                      {message?.text && (
-                        <div className="mt-2 text-xs bg-white p-2 rounded">
-                          <strong>Сообщение:</strong> {message.text}
+                      
+                      {isEcho && (
+                        <div className="mb-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                          ⚠️ Echo сообщение (отправлено агентом) - игнорируется
                         </div>
                       )}
-                      {message?.is_self && message?.is_echo && (
-                        <div className="mt-1 text-xs text-blue-600 font-medium">
+                      
+                      {isSelf && isEcho && (
+                        <div className="mb-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">
                           🎯 Self Messaging Event
                         </div>
+                      )}
+                      
+                      <div className="space-y-1">
+                        <div className="font-medium">
+                          <span className="text-gray-600">Sender ID:</span>{" "}
+                          <span className={senderId ? "text-green-600 font-bold" : "text-red-600"}>
+                            {senderId || "N/A"}
+                          </span>
+                          {senderId && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              (это recipient_id для отправки ответа)
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          <span className="text-gray-600">Recipient ID (наш аккаунт):</span>{" "}
+                          <span className={recipientId ? "text-blue-600" : "text-red-600"}>
+                            {recipientId || "N/A"}
+                          </span>
+                        </div>
+                        {message?.mid && (
+                          <div className="text-xs text-gray-500">
+                            Message ID: {message.mid}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {messageText && (
+                        <div className="mt-2 text-xs bg-white p-2 rounded border">
+                          <strong>Сообщение:</strong> {messageText}
+                        </div>
+                      )}
+                      
+                      {showFullPayload && (
+                        <details className="mt-2">
+                          <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-800">
+                            Показать полный payload (для отладки)
+                          </summary>
+                          <pre className="mt-2 text-xs bg-gray-800 text-green-400 p-2 rounded overflow-x-auto">
+                            {JSON.stringify(event.payload, null, 2)}
+                          </pre>
+                        </details>
                       )}
                     </div>
                   );

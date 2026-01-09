@@ -16,9 +16,23 @@ const nextConfig: NextConfig = {
     domains: [],
   },
 
-  // Headers для правильной работы кэширования
+  // Headers для правильной работы кэширования и безопасности
   async headers() {
     return [
+      {
+        // Применяем заголовки безопасности ко всем страницам
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload'
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: 'upgrade-insecure-requests'
+          },
+        ],
+      },
       {
         // Статические файлы с хешами можно кэшировать долго
         source: '/_next/static/:path*',

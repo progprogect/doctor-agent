@@ -4,20 +4,20 @@
 # HTTPS Listener for ALB (required for Instagram webhook)
 # Note: Instagram requires HTTPS for webhook verification
 # 
-# Certificate ARN: arn:aws:acm:me-central-1:760221990195:certificate/fb01239b-42b6-43b0-8325-855d6a9d0247
-# This certificate was imported manually via AWS CLI (self-signed certificate)
-# For production, use a proper domain-based certificate from ACM or Let's Encrypt
+# Certificate ARN: arn:aws:acm:me-central-1:760221990195:certificate/8b667aae-1fd7-42e4-8cab-c09172d21a88
+# Let's Encrypt certificate for agents.elemental.ae, imported to ACM
+# Certificate expires: 2026-04-08 (will need renewal before expiry)
 
 # HTTPS Listener - Default action forwards to frontend
-# Using imported self-signed certificate ARN
+# Using Let's Encrypt certificate imported to ACM
 resource "aws_lb_listener" "frontend_https" {
   count             = var.enable_alb ? 1 : 0
   load_balancer_arn = aws_lb.main[0].arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  # Using imported certificate ARN (created manually via AWS CLI)
-  certificate_arn   = "arn:aws:acm:me-central-1:760221990195:certificate/fb01239b-42b6-43b0-8325-855d6a9d0247"
+  # Using Let's Encrypt certificate imported to ACM
+  certificate_arn   = "arn:aws:acm:me-central-1:760221990195:certificate/8b667aae-1fd7-42e4-8cab-c09172d21a88"
 
   default_action {
     type             = "forward"

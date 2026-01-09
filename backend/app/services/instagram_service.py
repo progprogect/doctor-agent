@@ -94,10 +94,27 @@ class InstagramService:
         recipient_id = recipient.get("id")  # This is the Instagram Business Account ID
         message_text = message_data.get("text", "")
         message_id = message_data.get("mid")
+        is_echo = message_data.get("is_echo", False)
+        is_self = message_data.get("is_self", False)
+
+        # CRITICAL: Filter out echo messages (messages sent by our agent)
+        # Instagram sends back webhook events for messages we send, marked with is_echo=True
+        # If we process these, it creates an infinite loop
+        if is_echo:
+            logger.info(
+                f"Ignoring echo message (sent by agent): message_id={message_id}, sender_id={sender_id}"
+            )
+            return
 
         if not sender_id or not recipient_id or not message_text:
             logger.warning(f"Incomplete messaging event: {event}")
             return
+
+        # Log self-messaging events for debugging (but process them normally)
+        if is_self:
+            logger.info(
+                f"Self-messaging event detected: sender_id={sender_id}, recipient_id={recipient_id}"
+            )
 
         # Find binding by Instagram account ID
         binding = await self.channel_binding_service.get_binding_by_account_id(
@@ -226,10 +243,36 @@ class InstagramService:
         external_conversation_id: Optional[str],
     ) -> Conversation:
         """Find existing conversation or create new one."""
-        # Try to find existing conversation by external_user_id
-        # For now, we'll create a new conversation for each user
-        # In the future, we could add a GSI to find conversations by external_user_id
+        # Try to find existing conversation by external_user_id and agent_id
+        # This prevents creating multiple conversations for the same user
+        try:
+            all_conversations = await self.dynamodb.list_conversations(
+                agent_id=agent_id,
+                limit=100,
+            )
+            
+            # Find conversation with matching external_user_id
+            for conv in all_conversations:
+                # Handle both enum and string channel (from DynamoDB)
+                conv_channel = (
+                    conv.channel.value
+                    if hasattr(conv.channel, "value")
+                    else str(conv.channel)
+                )
+                if (
+                    conv_channel == MessageChannel.INSTAGRAM.value
+                    and conv.external_user_id == external_user_id
+                ):
+                    logger.info(
+                        f"Found existing conversation {conv.conversation_id} for user {external_user_id}"
+                    )
+                    return conv
+        except Exception as e:
+            logger.warning(
+                f"Error searching for existing conversation: {e}. Creating new one."
+            )
 
+        # No existing conversation found, create new one
         conversation_id = str(uuid.uuid4())
         conversation = Conversation(
             conversation_id=conversation_id,
@@ -243,6 +286,9 @@ class InstagramService:
         )
 
         await self.dynamodb.create_conversation(conversation)
+        logger.info(
+            f"Created new conversation {conversation_id} for user {external_user_id}"
+        )
         return conversation
 
     async def send_message(
