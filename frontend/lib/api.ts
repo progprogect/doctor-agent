@@ -17,29 +17,22 @@ import type {
   UpdateChannelBindingRequest,
 } from "./types/channel";
 
-// Use relative URL when running on same domain (via ALB), fallback to env var or localhost
-// Force HTTPS if NEXT_PUBLIC_API_URL is set, otherwise use window.location.origin
-// If window.location.origin is HTTP but page is HTTPS, force HTTPS
+// Use relative URLs when running on same domain (via ALB)
+// This automatically uses the same protocol (HTTP/HTTPS) as the page
+// Fallback to absolute URL only for development (localhost)
 const getApiBaseUrl = () => {
-  // Priority 1: Use NEXT_PUBLIC_API_URL if set (embedded during build)
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+  // If running on same domain (production), use empty string for relative URLs
+  if (typeof window !== "undefined" && window.location) {
+    const host = window.location.host;
+    // If not localhost, use relative URLs (empty string)
+    if (host !== "localhost:3000" && !host.startsWith("localhost:")) {
+      return ""; // Relative URL - uses same protocol as page
+    }
   }
   
-  // Priority 2: Use window.location if available, but force HTTPS if page is HTTPS
-  if (typeof window !== "undefined" && window.location) {
-    const protocol = window.location.protocol;
-    const host = window.location.host;
-    
-    // Always use HTTPS if page is loaded over HTTPS
-    if (protocol === "https:") {
-      return `https://${host}`;
-    }
-    
-    // Use origin as-is for HTTP (development)
-    if (protocol === "http:") {
-      return `http://${host}`;
-    }
+  // Fallback: Use NEXT_PUBLIC_API_URL if set (for development or custom domains)
+  if (typeof process !== "undefined" && process.env && process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
   
   // Fallback: localhost for development
