@@ -100,46 +100,67 @@ async def handle_webhook(
         logger.info("="*80)
         logger.info(f"Full payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
         
-        # Извлекаем и логируем sender.id если есть
+        # Извлекаем и логируем информацию о событии
         entries = payload.get("entry", [])
         for entry in entries:
             messaging = entry.get("messaging", [])
             for event in messaging:
-                sender = event.get("sender", {})
-                recipient = event.get("recipient", {})
-                message_data = event.get("message", {})
-                
-                sender_id = sender.get("id")
-                recipient_id = recipient.get("id")
-                message_text = message_data.get("text", "")
-                message_id = message_data.get("mid")
-                is_self = message_data.get("is_self", False)
-                is_echo = message_data.get("is_echo", False)
+                # Определяем тип события
+                event_type = "unknown"
+                if "message" in event:
+                    event_type = "message"
+                elif "message_edit" in event:
+                    event_type = "message_edit"
+                elif "message_reaction" in event:
+                    event_type = "message_reaction"
+                elif "message_unsend" in event:
+                    event_type = "message_unsend"
                 
                 logger.info("-"*80)
-                logger.info(f"🔹 Sender ID (это recipient_id для отправки): {sender_id}")
-                logger.info(f"🔹 Recipient ID (наш аккаунт): {recipient_id}")
-                logger.info(f"🔹 Message ID: {message_id}")
-                logger.info(f"🔹 Message Text: {message_text}")
-                logger.info(f"🔹 Is Self: {is_self}")
-                logger.info(f"🔹 Is Echo: {is_echo}")
+                logger.info(f"🔹 Тип события: {event_type}")
+                
+                if event_type == "message":
+                    sender = event.get("sender", {})
+                    recipient = event.get("recipient", {})
+                    message_data = event.get("message", {})
+                    
+                    sender_id = sender.get("id")
+                    recipient_id = recipient.get("id")
+                    message_text = message_data.get("text", "")
+                    message_id = message_data.get("mid")
+                    is_self = message_data.get("is_self", False)
+                    is_echo = message_data.get("is_echo", False)
+                    
+                    logger.info(f"🔹 Sender ID (это recipient_id для отправки): {sender_id}")
+                    logger.info(f"🔹 Recipient ID (наш аккаунт): {recipient_id}")
+                    logger.info(f"🔹 Message ID: {message_id}")
+                    logger.info(f"🔹 Message Text: {message_text}")
+                    logger.info(f"🔹 Is Self: {is_self}")
+                    logger.info(f"🔹 Is Echo: {is_echo}")
+                    
+                    if is_self and is_echo:
+                        logger.info("="*80)
+                        logger.info("🎯 SELF MESSAGING WEBHOOK ОБНАРУЖЕН!")
+                        logger.info("="*80)
+                        logger.info(f"✅ Instagram-scoped ID для Self Messaging: {recipient_id}")
+                        logger.info(f"   Используйте этот ID для отправки самому себе:")
+                        logger.info(f"   POST /{recipient_id}/messages")
+                        logger.info(f"   Body: {{'message': {{'text': '...'}}}}")
+                        logger.info(f"   (БЕЗ поля recipient!)")
+                        logger.info("="*80)
+                    
+                    if sender_id:
+                        logger.info(f"✅ НАЙДЕН RECIPIENT_ID: {sender_id}")
+                        logger.info(f"   Используйте этот ID для отправки сообщения:")
+                        logger.info(f"   python3 test_instagram_send.py {sender_id}")
+                else:
+                    logger.info(f"⚠️  Событие типа '{event_type}' не содержит sender/recipient ID")
+                    logger.info(f"   Для отправки ответа нужно обычное сообщение (event_type='message')")
+                    if event_type == "message_edit":
+                        edit_data = event.get("message_edit", {})
+                        logger.info(f"   Message ID: {edit_data.get('mid', 'N/A')}")
+                
                 logger.info("-"*80)
-                
-                if is_self and is_echo:
-                    logger.info("="*80)
-                    logger.info("🎯 SELF MESSAGING WEBHOOK ОБНАРУЖЕН!")
-                    logger.info("="*80)
-                    logger.info(f"✅ Instagram-scoped ID для Self Messaging: {recipient_id}")
-                    logger.info(f"   Используйте этот ID для отправки самому себе:")
-                    logger.info(f"   POST /{recipient_id}/messages")
-                    logger.info(f"   Body: {{'message': {{'text': '...'}}}}")
-                    logger.info(f"   (БЕЗ поля recipient!)")
-                    logger.info("="*80)
-                
-                if sender_id:
-                    logger.info(f"✅ НАЙДЕН RECIPIENT_ID: {sender_id}")
-                    logger.info(f"   Используйте этот ID для отправки сообщения:")
-                    logger.info(f"   python3 test_instagram_send.py {sender_id}")
         
     except Exception as e:
         logger.error(f"Failed to parse webhook payload: {e}")

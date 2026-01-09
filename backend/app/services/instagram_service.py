@@ -78,11 +78,41 @@ class InstagramService:
             for entry in entries:
                 messaging = entry.get("messaging", [])
                 for event in messaging:
-                    await self._process_messaging_event(event)
+                    # Check event type - only process message events, skip others (message_edit, etc.)
+                    event_type = self._get_event_type(event)
+                    if event_type == "message":
+                        await self._process_messaging_event(event)
+                    else:
+                        logger.info(
+                            f"Skipping event type '{event_type}': {event.get(event_type, {}).get('mid', 'unknown')}"
+                        )
 
         except Exception as e:
             logger.error(f"Error handling Instagram webhook event: {e}", exc_info=True)
             raise
+
+    def _get_event_type(self, event: dict[str, Any]) -> str:
+        """Determine the type of Instagram webhook event."""
+        # Instagram webhook events can have different types:
+        # - message: regular message
+        # - message_edit: message was edited
+        # - message_reaction: reaction to message
+        # - message_unsend: message was unsent
+        # - etc.
+        
+        if "message" in event:
+            return "message"
+        elif "message_edit" in event:
+            return "message_edit"
+        elif "message_reaction" in event:
+            return "message_reaction"
+        elif "message_unsend" in event:
+            return "message_unsend"
+        elif "sender" in event and "recipient" in event:
+            # Fallback: if sender and recipient exist, treat as message
+            return "message"
+        else:
+            return "unknown"
 
     async def _process_messaging_event(self, event: dict[str, Any]) -> None:
         """Process a single messaging event."""

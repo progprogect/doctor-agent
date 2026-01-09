@@ -290,9 +290,17 @@ export default function InstagramTestPage() {
                   const recipient = messaging?.recipient;
                   const message = messaging?.message;
                   
+                  // Определяем тип события
+                  const eventType = extracted.event_type || 
+                    (message ? "message" : 
+                     messaging?.message_edit ? "message_edit" :
+                     messaging?.message_reaction ? "message_reaction" :
+                     messaging?.message_unsend ? "message_unsend" : "unknown");
+                  
                   // Извлекаем ID для отправки ответа (приоритет извлеченной информации)
-                  const senderId = extracted.sender_id || sender?.id;
-                  const recipientId = extracted.recipient_id || recipient?.id;
+                  // Только для обычных сообщений есть sender/recipient
+                  const senderId = eventType === "message" ? (extracted.sender_id || sender?.id) : null;
+                  const recipientId = eventType === "message" ? (extracted.recipient_id || recipient?.id) : null;
                   const messageText = extracted.message_text || message?.text;
                   const isEcho = extracted.is_echo ?? message?.is_echo ?? false;
                   const isSelf = extracted.is_self ?? message?.is_self ?? false;
@@ -336,6 +344,15 @@ export default function InstagramTestPage() {
                           )}
                         </div>
                       </div>
+                      
+                      {eventType !== "message" && (
+                        <div className="mb-2 text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
+                          📋 Тип события: <strong>{eventType}</strong>
+                          {eventType === "message_edit" && (
+                            <span className="ml-2">(редактирование сообщения - нет sender/recipient ID)</span>
+                          )}
+                        </div>
+                      )}
                       
                       {isEcho && (
                         <div className="mb-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
