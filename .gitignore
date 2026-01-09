@@ -83,3 +83,7 @@ Thumbs.db
 
 
 
+LETS_ENCRYPT_INSTRUCTIONS.md
+MIXED_CONTENT_FIX_REPORT.md
+deploy_frontend_fix.sh
+setup_letsencrypt_complete.sh
