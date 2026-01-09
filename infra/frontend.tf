@@ -75,15 +75,10 @@ resource "aws_ecs_task_definition" "frontend" {
         {
           name  = "NODE_ENV"
           value = "production"
-        },
-        {
-          name  = "NEXT_PUBLIC_API_URL"
-          value = var.enable_alb ? "http://${aws_lb.main[0].dns_name}" : ""
-        },
-        {
-          name  = "NEXT_PUBLIC_WS_URL"
-          value = var.enable_alb ? "ws://${aws_lb.main[0].dns_name}" : ""
         }
+        // NEXT_PUBLIC_API_URL и NEXT_PUBLIC_WS_URL удалены
+        // Код теперь использует относительные URL в браузере
+        // Это гарантирует HTTPS если страница HTTPS
       ]
 
       logConfiguration = {
@@ -95,13 +90,14 @@ resource "aws_ecs_task_definition" "frontend" {
         }
       }
 
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:3000/ || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 90
-      }
+      # Health check временно отключен для диагностики проблемы
+      # healthCheck = {
+      #   command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      #   interval    = 30
+      #   timeout     = 10
+      #   retries     = 3
+      #   startPeriod = 150
+      # }
     }
   ])
 
