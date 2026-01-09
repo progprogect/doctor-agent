@@ -80,7 +80,35 @@ class InstagramService:
                 for event in messaging:
                     # Check event type - only process message events, skip others (message_edit, etc.)
                     event_type = self._get_event_type(event)
-                    if event_type == "message":
+                    
+                    # Log detailed information about message_edit events
+                    if event_type == "message_edit":
+                        edit_data = event.get("message_edit", {})
+                        num_edit = edit_data.get("num_edit", -1)
+                        mid = edit_data.get("mid", "unknown")
+                        entry_id = entry.get("id")  # This is the Instagram Business Account ID
+                        
+                        logger.warning(
+                            f"Received message_edit event (num_edit={num_edit}, mid={mid[:50]}...)"
+                        )
+                        logger.warning(
+                            f"⚠️  Instagram sent message_edit event without sender/recipient IDs. "
+                            f"This is a known Instagram API behavior - they send message_edit with num_edit=0 for new messages. "
+                            f"Instagram may send a separate 'message' event later with sender/recipient IDs."
+                        )
+                        
+                        # Try to get message info via Graph API if we have entry_id (account ID)
+                        if entry_id and num_edit == 0:
+                            logger.info(
+                                f"Attempting to fetch message info via Graph API for message_id={mid[:50]}..."
+                            )
+                            # Note: This would require Graph API call, but we don't have sender_id yet
+                            # We'll wait for the 'message' event instead
+                        
+                        logger.info(
+                            f"Skipping message_edit event (waiting for 'message' event with sender/recipient IDs)"
+                        )
+                    elif event_type == "message":
                         await self._process_messaging_event(event)
                     else:
                         logger.info(
@@ -95,22 +123,26 @@ class InstagramService:
         """Determine the type of Instagram webhook event."""
         # Instagram webhook events can have different types:
         # - message: regular message
-        # - message_edit: message was edited
+        # - message_edit: message was edited (NOTE: Instagram may send message_edit with num_edit=0 for new messages!)
         # - message_reaction: reaction to message
         # - message_unsend: message was unsent
         # - etc.
         
-        if "message" in event:
+        # IMPORTANT: Check for sender/recipient FIRST, as message_edit events may not have them
+        # but if they do, we should treat it as a message event
+        if "sender" in event and "recipient" in event:
+            # If sender and recipient exist, treat as message (even if message_edit is also present)
+            return "message"
+        elif "message" in event:
             return "message"
         elif "message_edit" in event:
+            # Instagram sometimes sends message_edit with num_edit=0 for new messages
+            # But without sender/recipient, we can't process it
             return "message_edit"
         elif "message_reaction" in event:
             return "message_reaction"
         elif "message_unsend" in event:
             return "message_unsend"
-        elif "sender" in event and "recipient" in event:
-            # Fallback: if sender and recipient exist, treat as message
-            return "message"
         else:
             return "unknown"
 

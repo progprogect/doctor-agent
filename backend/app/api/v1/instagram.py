@@ -137,6 +137,18 @@ async def handle_webhook(
                     logger.info(f"🔹 Message Text: {message_text}")
                     logger.info(f"🔹 Is Self: {is_self}")
                     logger.info(f"🔹 Is Echo: {is_echo}")
+                elif event_type == "message_edit":
+                    edit_data = event.get("message_edit", {})
+                    num_edit = edit_data.get("num_edit", -1)
+                    mid = edit_data.get("mid", "unknown")
+                    entry_id = entry.get("id")
+                    
+                    logger.warning(f"⚠️  message_edit событие (num_edit={num_edit})")
+                    logger.warning(f"   Это известное поведение Instagram API - они отправляют message_edit с num_edit=0 для новых сообщений")
+                    logger.warning(f"   В этом событии НЕТ sender/recipient ID, поэтому мы не можем отправить ответ")
+                    logger.info(f"   Message ID: {mid[:50]}...")
+                    logger.info(f"   Entry ID (Account ID): {entry_id}")
+                    logger.info(f"   💡 Instagram может отправить отдельное 'message' событие позже с sender/recipient ID")
                     
                     if is_self and is_echo:
                         logger.info("="*80)

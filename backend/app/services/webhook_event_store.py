@@ -24,8 +24,12 @@ def add_webhook_event(event_type: str, payload: Dict[str, Any]) -> None:
             messaging = entry.get("messaging", [])
             for msg_event in messaging:
                 # Determine event type
+                # IMPORTANT: Check for sender/recipient FIRST, as message_edit events may not have them
                 event_type_name = "unknown"
-                if "message" in msg_event:
+                if "sender" in msg_event and "recipient" in msg_event:
+                    # If sender and recipient exist, treat as message (even if message_edit is also present)
+                    event_type_name = "message"
+                elif "message" in msg_event:
                     event_type_name = "message"
                 elif "message_edit" in msg_event:
                     event_type_name = "message_edit"
@@ -35,6 +39,16 @@ def add_webhook_event(event_type: str, payload: Dict[str, Any]) -> None:
                     event_type_name = "message_unsend"
                 
                 extracted_info["event_type"] = event_type_name
+                
+                # Extract num_edit for message_edit events to understand if it's a new message
+                if event_type_name == "message_edit":
+                    edit_data = msg_event.get("message_edit", {})
+                    num_edit = edit_data.get("num_edit", -1)
+                    extracted_info["num_edit"] = num_edit
+                    if num_edit == 0:
+                        extracted_info["note"] = "message_edit with num_edit=0 (may be a new message, but no sender/recipient IDs)"
+                    else:
+                        extracted_info["note"] = "message_edit event - no sender/recipient IDs available"
                 
                 # Only extract IDs for message events (not message_edit, etc.)
                 if event_type_name == "message":
@@ -54,12 +68,7 @@ def add_webhook_event(event_type: str, payload: Dict[str, Any]) -> None:
                         extracted_info["is_echo"] = message_data.get("is_echo")
                     if message_data.get("is_self"):
                         extracted_info["is_self"] = message_data.get("is_self")
-                elif event_type_name == "message_edit":
-                    # For message_edit, we can extract the message ID but not sender/recipient
-                    edit_data = msg_event.get("message_edit", {})
-                    if edit_data.get("mid"):
-                        extracted_info["message_id"] = edit_data.get("mid")
-                        extracted_info["note"] = "message_edit event - no sender/recipient IDs available"
+                # Note: message_edit handling moved above (before checking event_type_name == "message")
                 
                 break  # Only process first messaging event
             break  # Only process first entry

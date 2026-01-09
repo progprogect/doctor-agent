@@ -346,10 +346,26 @@ export default function InstagramTestPage() {
                       </div>
                       
                       {eventType !== "message" && (
-                        <div className="mb-2 text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                          📋 Тип события: <strong>{eventType}</strong>
+                        <div className="mb-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded border border-yellow-300">
+                          <div className="font-medium">📋 Тип события: <strong>{eventType}</strong></div>
                           {eventType === "message_edit" && (
-                            <span className="ml-2">(редактирование сообщения - нет sender/recipient ID)</span>
+                            <div className="mt-1">
+                              <div>⚠️ Это известное поведение Instagram API:</div>
+                              <div className="ml-2">
+                                • Instagram отправляет <code>message_edit</code> с <code>num_edit=0</code> для новых сообщений
+                              </div>
+                              <div className="ml-2">
+                                • В этом событии <strong>НЕТ sender/recipient ID</strong>, поэтому нельзя отправить ответ
+                              </div>
+                              <div className="ml-2 mt-1">
+                                💡 Instagram может отправить отдельное событие <code>message</code> позже с ID
+                              </div>
+                              {extracted.num_edit !== undefined && (
+                                <div className="ml-2 mt-1">
+                                  num_edit: <strong>{extracted.num_edit}</strong> {extracted.num_edit === 0 && "(новое сообщение)"}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
