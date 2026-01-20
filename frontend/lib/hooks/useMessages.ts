@@ -24,18 +24,15 @@ export function useMessages(conversationId: string | null, autoRefresh = false) 
         setIsRefreshing(true);
       }
       setError(null);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useMessages.ts:27',message:'Before api.getMessages',data:{conversationId,isPolling},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,D'})}).catch(()=>{});
+      // #region agent log - disabled on production (CORS/TLS issues)
       // #endregion
       const data = await api.getMessages(conversationId);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useMessages.ts:30',message:'After api.getMessages',data:{conversationId,count:Array.isArray(data)?data.length:0,messageIds:Array.isArray(data)?data.slice(0,5).map(m=>m.message_id):[],roles:Array.isArray(data)?data.slice(0,5).map(m=>m.role):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,D,E'})}).catch(()=>{});
+      // #region agent log - disabled on production
       // #endregion
       // Ensure we always have an array, even if API returns null/undefined
       const messagesArray = Array.isArray(data) ? data : [];
       setMessages(messagesArray);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useMessages.ts:34',message:'setMessages called',data:{conversationId,count:messagesArray.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #region agent log - disabled on production
       // #endregion
       isInitialLoadRef.current = false;
     } catch (err) {

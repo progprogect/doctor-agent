@@ -344,9 +344,19 @@ class DynamoDBClient:
 
         result = [Message(**item) for item in items]
         # #region agent log
-        from app.utils.enum_helpers import get_enum_value
-        with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,E","location":"dynamodb.py:330","message":"list_messages exit","data":{"conversation_id":conversation_id,"method":method_used,"count":len(result),"message_ids":[m.message_id for m in result[:5]],"roles":[get_enum_value(m.role) for m in result[:5]]},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        try:
+            from app.utils.enum_helpers import get_enum_value
+            roles_list = []
+            for m in result[:5]:
+                try:
+                    roles_list.append(get_enum_value(m.role))
+                except:
+                    roles_list.append(str(m.role) if hasattr(m, 'role') else 'unknown')
+            with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,E","location":"dynamodb.py:330","message":"list_messages exit","data":{"conversation_id":conversation_id,"method":method_used,"count":len(result),"message_ids":[m.message_id for m in result[:5]],"roles":roles_list},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except Exception as log_err:
+            # Don't fail if logging fails
+            pass
         # #endregion
         return result
 

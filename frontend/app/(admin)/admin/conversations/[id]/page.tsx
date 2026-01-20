@@ -81,8 +81,8 @@ export default function ConversationDetailPage() {
   };
 
   const handleSendAdminMessage = async (content: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:83',message:'handleSendAdminMessage entry',data:{conversationId,content:content.substring(0,50),currentMessagesCount:messages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #region agent log - disabled on production (CORS/TLS issues)
+    // fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:83',message:'handleSendAdminMessage entry',data:{conversationId,content:content.substring(0,50),currentMessagesCount:messages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
     // #endregion
     try {
       setActionError(null);
@@ -101,29 +101,24 @@ export default function ConversationDetailPage() {
       // Add optimistic message to the list immediately
       const currentMessages = messages || [];
       setMessagesState([...currentMessages, optimisticMessage]);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:100',message:'Optimistic message added',data:{tempMessageId,newCount:currentMessages.length+1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #region agent log - disabled on production
       // #endregion
       
       // Send message to backend
       const response = await api.sendAdminMessage(conversationId, "admin_user", content);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:104',message:'sendAdminMessage response',data:{messageId:response.message_id,role:response.role},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #region agent log - disabled on production
       // #endregion
       
       // Wait a bit for message to be saved to DB, then refresh to get real message with correct ID
       setTimeout(async () => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:107',message:'Before refreshMessages',data:{conversationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #region agent log - disabled on production
         // #endregion
         await refreshMessages();
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:110',message:'After refreshMessages',data:{conversationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #region agent log - disabled on production
         // #endregion
       }, 500);
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:113',message:'Error in handleSendAdminMessage',data:{error:String(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #region agent log - disabled on production
       // #endregion
       // Remove optimistic message on error by refreshing
       const errorInfo = handleApiError(err);
