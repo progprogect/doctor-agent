@@ -89,27 +89,41 @@ async def handoff_conversation(
     if not conversation:
         raise ConversationNotFoundError(conversation_id)
 
-    # Update conversation status
-    updated = await deps.dynamodb.update_conversation(
-        conversation_id=conversation_id,
-        status=ConversationStatus.HUMAN_ACTIVE,
-        handoff_reason=request.reason or "Manual handoff",
-    )
+    try:
+        # Update conversation status
+        updated = await deps.dynamodb.update_conversation(
+            conversation_id=conversation_id,
+            status=ConversationStatus.HUMAN_ACTIVE,
+            handoff_reason=request.reason or "Manual handoff",
+        )
 
-    # Create audit log
-    await deps.dynamodb.create_audit_log(
-        admin_id=request.admin_id,
-        action="handoff",
-        resource_type="conversation",
-        resource_id=conversation_id,
-        metadata={"reason": request.reason},
-    )
+        # Create audit log
+        await deps.dynamodb.create_audit_log(
+            admin_id=request.admin_id,
+            action="handoff",
+            resource_type="conversation",
+            resource_id=conversation_id,
+            metadata={"reason": request.reason},
+        )
 
-    return HandoffResponse(
-        conversation_id=conversation_id,
-        status=updated.status.value if updated else ConversationStatus.HUMAN_ACTIVE.value,
-        message="Conversation handed off to human",
-    )
+        # Get status value safely (handle both enum and string)
+        status_value = (
+            get_enum_value(updated.status) if updated else ConversationStatus.HUMAN_ACTIVE.value
+        )
+        
+        return HandoffResponse(
+            conversation_id=conversation_id,
+            status=status_value,
+            message="Conversation handed off to human",
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error handing off conversation: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to handoff conversation: {str(e)}",
+        )
 
 
 class ReturnToAIRequest(BaseModel):
@@ -139,25 +153,39 @@ async def return_to_ai(
     if not conversation:
         raise ConversationNotFoundError(conversation_id)
 
-    # Update conversation status
-    updated = await deps.dynamodb.update_conversation(
-        conversation_id=conversation_id,
-        status=ConversationStatus.AI_ACTIVE,
-    )
+    try:
+        # Update conversation status
+        updated = await deps.dynamodb.update_conversation(
+            conversation_id=conversation_id,
+            status=ConversationStatus.AI_ACTIVE,
+        )
 
-    # Create audit log
-    await deps.dynamodb.create_audit_log(
-        admin_id=request.admin_id,
-        action="return_to_ai",
-        resource_type="conversation",
-        resource_id=conversation_id,
-    )
+        # Create audit log
+        await deps.dynamodb.create_audit_log(
+            admin_id=request.admin_id,
+            action="return_to_ai",
+            resource_type="conversation",
+            resource_id=conversation_id,
+        )
 
-    return {
-        "conversation_id": conversation_id,
-        "status": updated.status.value if updated else ConversationStatus.AI_ACTIVE.value,
-        "message": "Conversation returned to AI",
-    }
+        # Get status value safely (handle both enum and string)
+        status_value = (
+            get_enum_value(updated.status) if updated else ConversationStatus.AI_ACTIVE.value
+        )
+        
+        return {
+            "conversation_id": conversation_id,
+            "status": status_value,
+            "message": "Conversation returned to AI",
+        }
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error returning conversation to AI: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to return conversation to AI: {str(e)}",
+        )
 
 
 @router.get("/audit")
@@ -229,49 +257,65 @@ async def send_admin_message(
             detail="Admin can only send messages when conversation status is NEEDS_HUMAN or HUMAN_ACTIVE",
         )
 
-    # Create admin message
-    message_id = str(uuid.uuid4())
-    admin_message = Message(
-        message_id=message_id,
-        conversation_id=conversation_id,
-        agent_id=conversation.agent_id,
-        role=MessageRole.ADMIN,
-        content=request.content,
-        channel=conversation.channel,
-        timestamp=datetime.utcnow(),
-    )
+    try:
+        # Create admin message
+        message_id = str(uuid.uuid4())
+        admin_message = Message(
+            message_id=message_id,
+            conversation_id=conversation_id,
+            agent_id=conversation.agent_id,
+            role=MessageRole.ADMIN,
+            content=request.content,
+            channel=conversation.channel,
+            external_user_id=conversation.external_user_id,
+            timestamp=datetime.utcnow(),
+        )
 
-    await deps.dynamodb.create_message(admin_message)
+        await deps.dynamodb.create_message(admin_message)
 
-    # Send via WebSocket if connected
-    await connection_manager.send_message(
-        conversation_id,
-        {
-            "type": "message",
-            "message_id": message_id,
-            "role": "admin",
-            "content": request.content,
-            "timestamp": admin_message.timestamp.isoformat(),
-        },
-    )
+        # Send via WebSocket if connected (don't fail if WebSocket is not connected)
+        try:
+            await connection_manager.send_message(
+                conversation_id,
+                {
+                    "type": "message",
+                    "message_id": message_id,
+                    "role": "admin",
+                    "content": request.content,
+                    "timestamp": admin_message.timestamp.isoformat(),
+                },
+            )
+        except Exception as ws_error:
+            # Log but don't fail the request if WebSocket fails
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to send message via WebSocket: {ws_error}")
 
-    # Create audit log
-    await deps.dynamodb.create_audit_log(
-        admin_id=request.admin_id,
-        action="send_message",
-        resource_type="conversation",
-        resource_id=conversation_id,
-        metadata={"message_id": message_id},
-    )
+        # Create audit log
+        await deps.dynamodb.create_audit_log(
+            admin_id=request.admin_id,
+            action="send_message",
+            resource_type="conversation",
+            resource_id=conversation_id,
+            metadata={"message_id": message_id},
+        )
 
-    # Handle both enum and string role (from DynamoDB)
-    role_value = get_enum_value(admin_message.role)
-    return SendAdminMessageResponse(
-        message_id=message_id,
-        role=role_value,
-        content=admin_message.content,
-        timestamp=admin_message.timestamp.isoformat(),
-    )
+        # Handle both enum and string role (from DynamoDB)
+        role_value = get_enum_value(admin_message.role)
+        return SendAdminMessageResponse(
+            message_id=message_id,
+            role=role_value,
+            content=admin_message.content,
+            timestamp=admin_message.timestamp.isoformat(),
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error sending admin message: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send admin message: {str(e)}",
+        )
 
 
 @router.get("/stats")
