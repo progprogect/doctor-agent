@@ -9,7 +9,7 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
-import { useConversation } from "@/lib/hooks/useConversation";
+import { useAdminConversation } from "@/lib/hooks/useAdminConversation";
 import { useMessages } from "@/lib/hooks/useMessages";
 import { useAdminWebSocket } from "@/lib/hooks/useAdminWebSocket";
 import { handleApiError, getUserFriendlyMessage } from "@/lib/errorHandler";
@@ -27,7 +27,7 @@ export default function ConversationDetailPage() {
     isRefreshing: conversationRefreshing,
     error: conversationError,
     refresh: refreshConversation,
-  } = useConversation(conversationId);
+  } = useAdminConversation(conversationId);
 
   const {
     messages,

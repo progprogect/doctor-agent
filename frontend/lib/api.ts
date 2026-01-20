@@ -228,6 +228,14 @@ export const api = {
     );
   },
 
+  async getAdminConversation(conversationId: string): Promise<Conversation> {
+    return request<Conversation>(
+      `/api/v1/admin/conversations/${conversationId}`,
+      {},
+      true // require auth
+    );
+  },
+
   async getMessages(
     conversationId: string,
     limit: number = 100

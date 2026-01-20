@@ -15,7 +15,7 @@ from app.api.schemas import ConversationIDValidator
 from app.api.websocket import connection_manager
 from app.config import get_settings
 from app.dependencies import CommonDependencies
-from app.models.conversation import ConversationStatus
+from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageChannel, MessageRole
 from app.services.channel_binding_service import ChannelBindingService
 from app.services.channel_sender import get_channel_sender
@@ -70,6 +70,28 @@ async def list_conversations(
         limit=limit,
     )
     return conversations
+
+
+@router.get("/conversations/{conversation_id}", response_model=Conversation)
+async def get_conversation(
+    conversation_id: str,
+    deps: CommonDependencies = Depends(),
+    _admin: str = require_admin(),
+):
+    """Get conversation by ID (admin view)."""
+    # Validate UUID format
+    try:
+        UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid conversation ID format",
+        )
+
+    conversation = await deps.dynamodb.get_conversation(conversation_id)
+    if not conversation:
+        raise ConversationNotFoundError(conversation_id)
+    return conversation
 
 
 @router.post(
