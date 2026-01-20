@@ -25,13 +25,20 @@ export function useMessages(conversationId: string | null, autoRefresh = false) 
       }
       setError(null);
       const data = await api.getMessages(conversationId);
-      setMessages(data);
+      // Ensure we always have an array, even if API returns null/undefined
+      setMessages(Array.isArray(data) ? data : []);
       isInitialLoadRef.current = false;
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
+      // Don't show error for polling failures, only for initial load
+      if (isInitialLoadRef.current && !isPolling) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError("Failed to load messages");
+        }
       } else {
-        setError("Failed to load messages");
+        // For polling errors, just log them silently
+        console.warn("Failed to refresh messages:", err);
       }
     } finally {
       setIsLoading(false);

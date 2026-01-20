@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { AdminWebSocketClient, type AdminWebSocketMessage } from "@/lib/adminWebSocket";
+import { getAdminToken } from "@/lib/auth";
 
 export function useAdminWebSocket() {
   const [isConnected, setIsConnected] = useState(false);
@@ -16,11 +17,25 @@ export function useAdminWebSocket() {
   const statsUpdateHandlersRef = useRef<Set<(stats: any) => void>>(new Set());
 
   useEffect(() => {
+    // Check if we have a token before attempting connection
+    const token = getAdminToken();
+    
+    if (!token) {
+      // No token available, skip WebSocket connection
+      console.warn("useAdminWebSocket: No admin token, skipping WebSocket connection");
+      return;
+    }
+
     const client = new AdminWebSocketClient();
     wsClientRef.current = client;
 
     const unsubscribeConnection = client.onConnectionStateChange(setIsConnected);
-    const unsubscribeError = client.onError(setError);
+    const unsubscribeError = client.onError((err) => {
+      // Only set error if it's not a missing token issue
+      if (!err.message.includes("No token")) {
+        setError(err);
+      }
+    });
 
     // Handle different message types
     const unsubscribeMessage = client.onMessage((message: AdminWebSocketMessage) => {
@@ -55,7 +70,10 @@ export function useAdminWebSocket() {
     });
 
     client.connect().catch((err) => {
-      setError(err);
+      // Don't set error for missing token cases
+      if (!err.message?.includes("No token")) {
+        setError(err);
+      }
     });
 
     return () => {

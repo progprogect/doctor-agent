@@ -59,10 +59,16 @@ export class AdminWebSocketClient {
       return Promise.resolve();
     }
 
+    const token = getAdminToken();
+    // Don't attempt connection if token is missing
+    if (!token) {
+      console.warn("Admin WebSocket: No token available, skipping connection");
+      return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
       this.isConnecting = true;
-      const token = getAdminToken();
-      const wsUrl = `${WS_BASE_URL}/ws/admin?token=${encodeURIComponent(token || "")}`;
+      const wsUrl = `${WS_BASE_URL}/ws/admin?token=${encodeURIComponent(token)}`;
 
       try {
         this.ws = new WebSocket(wsUrl);
@@ -91,14 +97,15 @@ export class AdminWebSocketClient {
           reject(error);
         };
 
-        this.ws.onclose = () => {
+        this.ws.onclose = (event) => {
           this.isConnected = false;
           this.isConnecting = false;
           this.stopHeartbeat();
           this.notifyConnectionState(false);
 
-          // Attempt to reconnect
-          if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          // Only attempt to reconnect if we have a token and it wasn't a normal closure
+          const token = getAdminToken();
+          if (token && event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
             setTimeout(() => {
               this.connect().catch(() => {
