@@ -4,13 +4,13 @@ output "ecs_service_sg_id" {
 }
 
 output "redis_sg_id" {
-  description = "Security Group ID for Redis (only if Redis is enabled)"
-  value       = var.redis_num_cache_nodes > 0 && length(aws_security_group.redis) > 0 ? aws_security_group.redis[0].id : null
+  description = "Security Group ID for Redis"
+  value       = aws_security_group.redis.id
 }
 
 output "opensearch_sg_id" {
-  description = "Security Group ID for OpenSearch (only if OpenSearch is enabled)"
-  value       = var.enable_opensearch && length(aws_security_group.opensearch) > 0 ? aws_security_group.opensearch[0].id : null
+  description = "Security Group ID for OpenSearch"
+  value       = aws_security_group.opensearch.id
 }
 
 output "dynamodb_tables" {

@@ -21,7 +21,7 @@ resource "aws_opensearch_domain" "main" {
   vpc_options {
     # OpenSearch single-node требует только одну подсеть
     subnet_ids         = [var.private_subnet_ids[0]]
-    security_group_ids = [aws_security_group.opensearch[0].id]
+    security_group_ids = [aws_security_group.opensearch.id]
   }
 
   # Пароль задается через Secrets Manager после создания домена

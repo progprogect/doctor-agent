@@ -1,4 +1,8 @@
-"""FastAPI application entry point."""
+"""FastAPI application entry point.
+
+This is the main entry point for the Doctor Agent API.
+Optimized for cost efficiency using DynamoDB for caching and RAG.
+"""
 
 import logging
 from contextlib import asynccontextmanager

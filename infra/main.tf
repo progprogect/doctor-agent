@@ -28,9 +28,8 @@ resource "aws_security_group" "ecs_service" {
   }
 }
 
-# Security Group for Redis (создается только если Redis включен)
+# Security Group for Redis (оставляем для будущего использования)
 resource "aws_security_group" "redis" {
-  count       = var.redis_num_cache_nodes > 0 ? 1 : 0
   name        = "redis-sg"
   description = "Allow Redis access only from ECS backend"
   vpc_id      = var.vpc_id
@@ -59,9 +58,8 @@ resource "aws_security_group" "redis" {
   )
 }
 
-# Security Group for OpenSearch (создается только если OpenSearch включен)
+# Security Group for OpenSearch (оставляем для будущего использования)
 resource "aws_security_group" "opensearch" {
-  count       = var.enable_opensearch ? 1 : 0
   name        = "opensearch-sg"
   description = "Allow OpenSearch access only from ECS backend"
   vpc_id      = var.vpc_id
