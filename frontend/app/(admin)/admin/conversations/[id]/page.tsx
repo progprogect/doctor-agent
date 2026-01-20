@@ -111,11 +111,6 @@ export default function ConversationDetailPage() {
 
   return (
     <div>
-      {isRefreshing && (
-        <div className="mb-2 text-xs text-gray-500 text-right">
-          Updating...
-        </div>
-      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Conversation</h1>
