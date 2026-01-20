@@ -35,6 +35,7 @@ export default function ConversationDetailPage() {
     isRefreshing: messagesRefreshing,
     error: messagesError,
     refresh: refreshMessages,
+    setMessages: setMessagesState,
   } = useMessages(conversationId, true);
 
   const { onConversationUpdate } = useAdminWebSocket();
@@ -82,11 +83,35 @@ export default function ConversationDetailPage() {
   const handleSendAdminMessage = async (content: string) => {
     try {
       setActionError(null);
+      
+      // Optimistically add message to UI immediately
+      const tempMessageId = `temp-${Date.now()}`;
+      const optimisticMessage: Message = {
+        message_id: tempMessageId,
+        conversation_id: conversationId,
+        agent_id: conversation?.agent_id || "",
+        role: "admin",
+        content: content,
+        timestamp: new Date().toISOString(),
+      };
+      
+      // Add optimistic message to the list immediately
+      const currentMessages = messages || [];
+      setMessagesState([...currentMessages, optimisticMessage]);
+      
+      // Send message to backend
       await api.sendAdminMessage(conversationId, "admin_user", content);
-      await refreshMessages();
+      
+      // Wait a bit for message to be saved to DB, then refresh to get real message with correct ID
+      setTimeout(async () => {
+        await refreshMessages();
+      }, 500);
     } catch (err) {
+      // Remove optimistic message on error by refreshing
       const errorInfo = handleApiError(err);
       setActionError(getUserFriendlyMessage(errorInfo));
+      // Refresh to get correct state
+      await refreshMessages();
     }
   };
 

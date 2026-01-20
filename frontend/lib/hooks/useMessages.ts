@@ -71,6 +71,7 @@ export function useMessages(conversationId: string | null, autoRefresh = false) 
     isRefreshing,
     error,
     refresh: () => loadMessages(false),
+    setMessages: setMessages,
   };
 }
 
