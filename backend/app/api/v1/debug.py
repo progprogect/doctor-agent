@@ -5,6 +5,7 @@ from app.storage.dynamodb import DynamoDBClient
 from app.models.conversation import MessageChannel
 from app.config import get_settings
 from app.dependencies import CommonDependencies, Depends
+from app.utils.enum_helpers import get_enum_value
 
 router = APIRouter()
 
@@ -20,8 +21,7 @@ async def get_recent_instagram_conversations(
     
     instagram_convos = [
         conv for conv in all_conversations
-        if (hasattr(conv.channel, 'value') and conv.channel.value == MessageChannel.INSTAGRAM.value)
-        or (isinstance(conv.channel, str) and conv.channel == MessageChannel.INSTAGRAM.value)
+        if get_enum_value(conv.channel) == MessageChannel.INSTAGRAM.value
     ]
     
     instagram_convos.sort(
@@ -40,13 +40,13 @@ async def get_recent_instagram_conversations(
         result.append({
             "conversation_id": conv.conversation_id,
             "agent_id": conv.agent_id,
-            "status": conv.status.value if hasattr(conv.status, 'value') else str(conv.status),
+            "status": get_enum_value(conv.status),
             "external_user_id": conv.external_user_id,
             "created_at": conv.created_at.isoformat() if conv.created_at else None,
             "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
             "messages": [
                 {
-                    "role": msg.role.value if hasattr(msg.role, 'value') else str(msg.role),
+                    "role": get_enum_value(msg.role),
                     "content": msg.content[:100],
                     "timestamp": msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp),
                 }

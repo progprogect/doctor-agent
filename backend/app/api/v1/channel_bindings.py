@@ -12,6 +12,7 @@ from app.dependencies import CommonDependencies
 from app.models.channel_binding import ChannelBinding, ChannelType
 from app.services.channel_binding_service import ChannelBindingService
 from app.storage.secrets import get_secrets_manager
+from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -63,11 +64,7 @@ class ChannelBindingResponse(BaseModel):
         return cls(
             binding_id=binding.binding_id,
             agent_id=binding.agent_id,
-            channel_type=(
-                binding.channel_type.value
-                if hasattr(binding.channel_type, "value")
-                else str(binding.channel_type)
-            ),
+            channel_type=get_enum_value(binding.channel_type),
             channel_account_id=binding.channel_account_id,
             channel_username=binding.channel_username,
             is_active=binding.is_active,

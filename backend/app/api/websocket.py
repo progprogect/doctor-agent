@@ -17,6 +17,7 @@ from app.models.message import Message, MessageChannel, MessageRole
 from app.services.agent_service import create_agent_service
 from app.services.conversation_service import ConversationService
 from app.storage.dynamodb import DynamoDBClient
+from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
 
@@ -138,11 +139,7 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
             return
 
         # Verify conversation is for web chat channel
-        conversation_channel = (
-            conversation.channel.value
-            if hasattr(conversation.channel, "value")
-            else str(conversation.channel)
-        )
+        conversation_channel = get_enum_value(conversation.channel)
         if conversation_channel != MessageChannel.WEB_CHAT.value:
             await connection_manager.send_error(
                 conversation_id,
@@ -153,11 +150,7 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
 
         # Send initial status
         # Handle both enum and string status (from DynamoDB)
-        status_value = (
-            conversation.status.value
-            if hasattr(conversation.status, "value")
-            else str(conversation.status)
-        )
+        status_value = get_enum_value(conversation.status)
         await connection_manager.send_message(
             conversation_id,
             {
@@ -249,11 +242,7 @@ async def _handle_message(
 
     # Check if conversation is active
     # Handle both enum and string status (from DynamoDB)
-    status_value = (
-        conversation.status.value
-        if hasattr(conversation.status, "value")
-        else str(conversation.status)
-    )
+    status_value = get_enum_value(conversation.status)
     if status_value == ConversationStatus.CLOSED.value:
         await connection_manager.send_error(
             conversation_id, "Conversation is closed"
@@ -317,54 +306,66 @@ async def _handle_message(
     
     web_chat_sender = WebChatSender(dynamodb)
     agent_service = create_agent_service(agent_config, dynamodb, web_chat_sender)
-    result = await conversation_service.process_message(
-        conversation_id=conversation_id,
-        user_message=content,
-        agent_service=agent_service,
-    )
+    
+    try:
+        result = await conversation_service.process_message(
+            conversation_id=conversation_id,
+            user_message=content,
+            agent_service=agent_service,
+        )
 
-    # Handle escalation
-    if result.get("escalate"):
-        await connection_manager.send_message(
+        # Handle escalation
+        if result.get("escalate"):
+            await connection_manager.send_message(
+                conversation_id,
+                {
+                    "type": "handoff",
+                    "conversation_id": conversation_id,
+                    "reason": result.get("escalation_reason", "Escalation required"),
+                    "status": ConversationStatus.NEEDS_HUMAN.value,
+                    "timestamp": None,
+                },
+            )
+            return
+
+        # Send agent response
+        # Agent message is already created in agent_service.process_message
+        agent_response = result.get("response")
+        agent_message_id = result.get("agent_message_id")
+        agent_message_timestamp = result.get("agent_message_timestamp")
+        
+        if agent_response and agent_message_id:
+            # Use timestamp from result to avoid extra DB query
+            timestamp = agent_message_timestamp or datetime.utcnow().isoformat()
+            await connection_manager.send_message(
+                conversation_id,
+                {
+                    "type": "message",
+                    "message_id": agent_message_id,
+                    "role": "agent",
+                    "content": agent_response,
+                    "timestamp": timestamp,
+                },
+            )
+        elif agent_response:
+            # If message wasn't created in agent_service (shouldn't happen, but handle gracefully)
+            await connection_manager.send_error(
+                conversation_id, "Failed to save agent response"
+            )
+        else:
+            await connection_manager.send_error(
+                conversation_id, "Failed to generate agent response"
+            )
+    except Exception as e:
+        logger.error(
+            f"Error processing message in WebSocket for conversation {conversation_id}: {e}",
+            exc_info=True,
+        )
+        await connection_manager.send_error(
             conversation_id,
-            {
-                "type": "handoff",
-                "conversation_id": conversation_id,
-                "reason": result.get("escalation_reason", "Escalation required"),
-                "status": ConversationStatus.NEEDS_HUMAN.value,
-                "timestamp": None,
-            },
+            "An error occurred while processing your message. Please try again.",
         )
         return
-
-    # Send agent response
-    # Agent message is already created in agent_service.process_message
-    agent_response = result.get("response")
-    agent_message_id = result.get("agent_message_id")
-    agent_message_timestamp = result.get("agent_message_timestamp")
-    
-    if agent_response and agent_message_id:
-        # Use timestamp from result to avoid extra DB query
-        timestamp = agent_message_timestamp or datetime.utcnow().isoformat()
-        await connection_manager.send_message(
-            conversation_id,
-            {
-                "type": "message",
-                "message_id": agent_message_id,
-                "role": "agent",
-                "content": agent_response,
-                "timestamp": timestamp,
-            },
-        )
-    elif agent_response:
-        # If message wasn't created in agent_service (shouldn't happen, but handle gracefully)
-        await connection_manager.send_error(
-            conversation_id, "Failed to save agent response"
-        )
-    else:
-        await connection_manager.send_error(
-            conversation_id, "Failed to generate agent response"
-        )
 
 
 async def send_message_to_conversation(conversation_id: str, message: dict) -> bool:

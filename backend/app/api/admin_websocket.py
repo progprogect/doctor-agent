@@ -11,6 +11,7 @@ from fastapi.exceptions import HTTPException
 
 from app.config import get_settings
 from app.models.conversation import Conversation, ConversationStatus
+from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +65,7 @@ class AdminBroadcastManager:
             "conversation": {
                 "conversation_id": conversation.conversation_id,
                 "agent_id": conversation.agent_id,
-                "status": (
-                    conversation.status.value
-                    if hasattr(conversation.status, "value")
-                    else str(conversation.status)
-                ),
+                "status": get_enum_value(conversation.status),
                 "created_at": (
                     conversation.created_at.isoformat()
                     if hasattr(conversation.created_at, "isoformat")
@@ -101,11 +98,7 @@ class AdminBroadcastManager:
             "conversation": {
                 "conversation_id": conversation.conversation_id,
                 "agent_id": conversation.agent_id,
-                "status": (
-                    conversation.status.value
-                    if hasattr(conversation.status, "value")
-                    else str(conversation.status)
-                ),
+                "status": get_enum_value(conversation.status),
                 "created_at": (
                     conversation.created_at.isoformat()
                     if hasattr(conversation.created_at, "isoformat")

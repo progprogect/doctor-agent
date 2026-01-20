@@ -73,11 +73,8 @@ class InstagramSender(ChannelSender):
                 raise ValueError(f"Conversation {conversation_id} not found")
 
             # Handle both enum and string channel (from DynamoDB)
-            conversation_channel = (
-                conversation.channel.value
-                if hasattr(conversation.channel, "value")
-                else str(conversation.channel)
-            )
+            from app.utils.enum_helpers import get_enum_value
+            conversation_channel = get_enum_value(conversation.channel)
             if conversation_channel != MessageChannel.INSTAGRAM.value:
                 raise ValueError(
                     f"Conversation {conversation_id} is not an Instagram conversation"

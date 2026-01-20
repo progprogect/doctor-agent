@@ -15,6 +15,7 @@ from app.api.websocket import connection_manager
 from app.dependencies import CommonDependencies
 from app.models.conversation import ConversationStatus
 from app.models.message import Message, MessageChannel, MessageRole
+from app.utils.enum_helpers import get_enum_value
 
 router = APIRouter()
 
@@ -218,11 +219,7 @@ async def send_admin_message(
         raise ConversationNotFoundError(conversation_id)
 
     # Check conversation status - admin can only send messages when human is handling
-    status_value = (
-        conversation.status.value
-        if hasattr(conversation.status, "value")
-        else str(conversation.status)
-    )
+    status_value = get_enum_value(conversation.status)
     if status_value not in [
         ConversationStatus.NEEDS_HUMAN.value,
         ConversationStatus.HUMAN_ACTIVE.value,
@@ -268,11 +265,7 @@ async def send_admin_message(
     )
 
     # Handle both enum and string role (from DynamoDB)
-    role_value = (
-        admin_message.role.value
-        if hasattr(admin_message.role, "value")
-        else str(admin_message.role)
-    )
+    role_value = get_enum_value(admin_message.role)
     return SendAdminMessageResponse(
         message_id=message_id,
         role=role_value,

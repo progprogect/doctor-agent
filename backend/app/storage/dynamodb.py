@@ -15,6 +15,7 @@ from app.config import Settings, get_settings
 from app.models.channel_binding import ChannelBinding
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageRole
+from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +151,7 @@ class DynamoDBClient:
         old_conversation = await self.get_conversation(conversation_id)
         old_status = None
         if old_conversation:
-            old_status = (
-                old_conversation.status.value
-                if hasattr(old_conversation.status, "value")
-                else str(old_conversation.status)
-            )
+            old_status = get_enum_value(old_conversation.status)
 
         update_expression_parts = []
         expression_attribute_values = {}
@@ -205,11 +202,7 @@ class DynamoDBClient:
                     from app.models.conversation import ConversationStatus
                     
                     broadcast_manager = get_admin_broadcast_manager()
-                    new_status = (
-                        updated_conversation.status.value
-                        if hasattr(updated_conversation.status, "value")
-                        else str(updated_conversation.status)
-                    )
+                    new_status = get_enum_value(updated_conversation.status)
                     
                     # Check if this is a new escalation (status changed to NEEDS_HUMAN)
                     if (
@@ -411,11 +404,7 @@ class DynamoDBClient:
             item["updated_at"] = item["updated_at"].isoformat()
         # Convert enum to string
         if "channel_type" in item:
-            item["channel_type"] = (
-                item["channel_type"].value
-                if hasattr(item["channel_type"], "value")
-                else str(item["channel_type"])
-            )
+            item["channel_type"] = get_enum_value(item["channel_type"])
 
         self.tables["channel_bindings"].put_item(Item=item)
         return binding
@@ -608,8 +597,8 @@ class DynamoDBClient:
         expression_attribute_names = {}
 
         for key, value in kwargs.items():
-            if key == "channel_type" and hasattr(value, "value"):
-                value = value.value
+            if key == "channel_type":
+                value = get_enum_value(value)
             
             # Check if key is a reserved keyword and use ExpressionAttributeNames
             if key in self._reserved_keywords:

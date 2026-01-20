@@ -6,6 +6,7 @@ from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageRole
 from app.services.agent_service import AgentService, create_agent_service
 from app.storage.dynamodb import DynamoDBClient
+from app.utils.enum_helpers import get_enum_value
 
 
 class ConversationService:
@@ -37,7 +38,7 @@ class ConversationService:
         # Reverse to get chronological order (oldest first) for LLM context
         conversation_history = [
             {
-                "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
+                "role": get_enum_value(msg.role),
                 "content": msg.content,
             }
             for msg in reversed(history_messages)  # Reverse to chronological order
@@ -98,11 +99,7 @@ class ConversationService:
 
         # Update conversation status if needed
         # Handle both enum and string status (from DynamoDB)
-        status_value = (
-            conversation.status.value
-            if hasattr(conversation.status, "value")
-            else str(conversation.status)
-        )
+        status_value = get_enum_value(conversation.status)
         if status_value != ConversationStatus.AI_ACTIVE.value:
             await self.dynamodb.update_conversation(
                 conversation_id=conversation_id,

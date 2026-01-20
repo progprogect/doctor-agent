@@ -24,6 +24,7 @@ from app.services.channel_binding_service import ChannelBindingService
 from app.services.instagram_service import InstagramService
 from app.config import get_settings
 from app.storage.secrets import get_secrets_manager
+from app.utils.enum_helpers import get_enum_value
 
 router = APIRouter()
 
@@ -85,11 +86,7 @@ async def create_conversation(
     await deps.dynamodb.create_conversation(conversation)
 
     # Handle both enum and string status (from DynamoDB)
-    status_value = (
-        conversation.status.value
-        if hasattr(conversation.status, "value")
-        else str(conversation.status)
-    )
+    status_value = get_enum_value(conversation.status)
     return CreateConversationResponse(
         conversation_id=conversation_id,
         agent_id=request.agent_id,
@@ -145,11 +142,7 @@ async def send_message(
 
     # Check if conversation is active
     # Handle both enum and string status (from DynamoDB)
-    status_value = (
-        conversation.status.value
-        if hasattr(conversation.status, "value")
-        else str(conversation.status)
-    )
+    status_value = get_enum_value(conversation.status)
     if status_value == ConversationStatus.CLOSED.value:
         raise HTTPException(status_code=400, detail="Conversation is closed")
 
@@ -174,11 +167,7 @@ async def send_message(
         ConversationStatus.HUMAN_ACTIVE.value,
     ]:
         # Return user message without agent processing
-        role_value = (
-            user_message.role.value
-            if hasattr(user_message.role, "value")
-            else str(user_message.role)
-        )
+        role_value = get_enum_value(user_message.role)
         return SendMessageResponse(
             message_id=message_id,
             role=role_value,
@@ -205,7 +194,7 @@ async def send_message(
     # After reverse: [oldest_message, ..., newest_message]
     conversation_history = [
         {
-            "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
+            "role": get_enum_value(msg.role),
             "content": msg.content,
         }
         for msg in reversed(history_messages)  # Reverse to chronological order (oldest first)
@@ -226,11 +215,7 @@ async def send_message(
 
     # Get channel sender for the conversation's channel
     # Handle both enum and string channel (from DynamoDB)
-    conversation_channel = (
-        conversation.channel.value
-        if hasattr(conversation.channel, "value")
-        else str(conversation.channel)
-    )
+    conversation_channel = get_enum_value(conversation.channel)
     
     instagram_service = None
     if conversation_channel != MessageChannel.WEB_CHAT.value:
@@ -259,11 +244,7 @@ async def send_message(
         # Status already updated in agent_service, just return user message
         # Return user message with escalation notice
         # Handle both enum and string role (from DynamoDB)
-        role_value = (
-            user_message.role.value
-            if hasattr(user_message.role, "value")
-            else str(user_message.role)
-        )
+        role_value = get_enum_value(user_message.role)
         return SendMessageResponse(
             message_id=message_id,
             role=role_value,
@@ -294,11 +275,7 @@ async def send_message(
 
     # Update conversation status if needed
     # Handle both enum and string status (from DynamoDB)
-    status_value = (
-        conversation.status.value
-        if hasattr(conversation.status, "value")
-        else str(conversation.status)
-    )
+    status_value = get_enum_value(conversation.status)
     if status_value != ConversationStatus.AI_ACTIVE.value:
         await deps.dynamodb.update_conversation(
             conversation_id=conversation_id,
@@ -306,11 +283,7 @@ async def send_message(
         )
 
     # Handle both enum and string role (from DynamoDB)
-    role_value = (
-        agent_message.role.value
-        if hasattr(agent_message.role, "value")
-        else str(agent_message.role)
-    )
+    role_value = get_enum_value(agent_message.role)
     return SendMessageResponse(
         message_id=agent_message_id,
         role=role_value,

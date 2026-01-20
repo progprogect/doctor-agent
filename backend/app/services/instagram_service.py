@@ -219,11 +219,8 @@ class InstagramService:
         await self.dynamodb.create_message(user_message)
 
         # Check if conversation is handled by human - don't process with agent
-        status_value = (
-            conversation.status.value
-            if hasattr(conversation.status, "value")
-            else str(conversation.status)
-        )
+        from app.utils.enum_helpers import get_enum_value
+        status_value = get_enum_value(conversation.status)
         if status_value in [
             ConversationStatus.NEEDS_HUMAN.value,
             ConversationStatus.HUMAN_ACTIVE.value,
@@ -253,7 +250,7 @@ class InstagramService:
             )
             conversation_history = [
                 {
-                    "role": msg.role.value if hasattr(msg.role, "value") else str(msg.role),
+                    "role": get_enum_value(msg.role),
                     "content": msg.content,
                 }
                 for msg in reversed(history_messages)
@@ -316,11 +313,7 @@ class InstagramService:
             # Find conversation with matching external_user_id
             for conv in all_conversations:
                 # Handle both enum and string channel (from DynamoDB)
-                conv_channel = (
-                    conv.channel.value
-                    if hasattr(conv.channel, "value")
-                    else str(conv.channel)
-                )
+                conv_channel = get_enum_value(conv.channel)
                 if (
                     conv_channel == MessageChannel.INSTAGRAM.value
                     and conv.external_user_id == external_user_id
