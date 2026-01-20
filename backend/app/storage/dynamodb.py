@@ -298,8 +298,14 @@ class DynamoDBClient:
         reverse: bool = True,
     ) -> list[Message]:
         """List messages for a conversation."""
+        # #region agent log
+        import json
+        with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:300","message":"list_messages entry","data":{"conversation_id":conversation_id,"limit":limit,"reverse":reverse},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        # #endregion
         # For MVP, using query on conversation_id (requires GSI)
         # Fallback to scan if GSI not available
+        method_used = None
         try:
             response = self.tables["messages"].query(
                 IndexName="conversation_id-index",  # Requires GSI
@@ -309,7 +315,17 @@ class DynamoDBClient:
                 ScanIndexForward=not reverse,
             )
             items = response.get("Items", [])
-        except ClientError:
+            method_used = "query"
+            # #region agent log
+            with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:312","message":"Query succeeded","data":{"conversation_id":conversation_id,"items_count":len(items)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            # #endregion
+        except ClientError as e:
+            method_used = "scan"
+            # #region agent log
+            with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:318","message":"Query failed, using scan","data":{"conversation_id":conversation_id,"error":str(e)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            # #endregion
             # Fallback to scan if GSI doesn't exist
             # Don't pass ExpressionAttributeNames if it's empty - DynamoDB doesn't accept empty dict
             scan_kwargs = {
@@ -321,8 +337,18 @@ class DynamoDBClient:
             items = response.get("Items", [])
             # Sort by timestamp
             items.sort(key=lambda x: x.get("timestamp", ""), reverse=reverse)
+            # #region agent log
+            with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:327","message":"Scan completed","data":{"conversation_id":conversation_id,"items_count":len(items)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            # #endregion
 
-        return [Message(**item) for item in items]
+        result = [Message(**item) for item in items]
+        # #region agent log
+        from app.utils.enum_helpers import get_enum_value
+        with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,E","location":"dynamodb.py:330","message":"list_messages exit","data":{"conversation_id":conversation_id,"method":method_used,"count":len(result),"message_ids":[m.message_id for m in result[:5]],"roles":[get_enum_value(m.role) for m in result[:5]]},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        # #endregion
+        return result
 
     # Agent operations
     async def create_agent(self, agent_id: str, config: dict[str, Any]) -> dict[str, Any]:

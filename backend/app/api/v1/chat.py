@@ -313,6 +313,15 @@ async def get_messages(
     if not conversation:
         raise ConversationNotFoundError(conversation_id)
 
+    # #region agent log
+    import json
+    with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C","location":"chat.py:314","message":"Before list_messages","data":{"conversation_id":conversation_id,"limit":limit},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+    # #endregion
     messages = await deps.dynamodb.list_messages(conversation_id, limit=limit)
+    # #region agent log
+    with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
+        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C","location":"chat.py:317","message":"After list_messages","data":{"conversation_id":conversation_id,"count":len(messages),"message_ids":[m.message_id for m in messages[:5]],"roles":[get_enum_value(m.role) for m in messages[:5]]},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+    # #endregion
     return messages
 
