@@ -1,24 +1,32 @@
 /** Hook for managing conversation state. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { Conversation } from "@/lib/types/conversation";
 
 export function useConversation(conversationId: string | null) {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isInitialLoadRef = useRef(true);
 
-  const loadConversation = async () => {
+  const loadConversation = async (isPolling = false) => {
     if (!conversationId) {
       return;
     }
 
     try {
-      setIsLoading(true);
+      // Only set isLoading for initial load, not for polling
+      if (isInitialLoadRef.current && !isPolling) {
+        setIsLoading(true);
+      } else if (isPolling) {
+        setIsRefreshing(true);
+      }
       setError(null);
       const data = await api.getConversation(conversationId);
       setConversation(data);
+      isInitialLoadRef.current = false;
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -27,6 +35,7 @@ export function useConversation(conversationId: string | null) {
       }
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -35,11 +44,13 @@ export function useConversation(conversationId: string | null) {
       return;
     }
 
-    loadConversation();
-    // Poll for status updates every 5 seconds
+    isInitialLoadRef.current = true;
+    loadConversation(false);
+    
+    // Poll for status updates every 10 seconds (less aggressive)
     const interval = setInterval(() => {
-      loadConversation();
-    }, 5000);
+      loadConversation(true);
+    }, 10000);
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,8 +59,9 @@ export function useConversation(conversationId: string | null) {
   return {
     conversation,
     isLoading,
+    isRefreshing,
     error,
-    refresh: loadConversation,
+    refresh: () => loadConversation(false),
   };
 }
 

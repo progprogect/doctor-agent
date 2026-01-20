@@ -11,6 +11,7 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { useConversation } from "@/lib/hooks/useConversation";
 import { useMessages } from "@/lib/hooks/useMessages";
+import { useAdminWebSocket } from "@/lib/hooks/useAdminWebSocket";
 import { handleApiError, getUserFriendlyMessage } from "@/lib/errorHandler";
 import type { Conversation } from "@/lib/types/conversation";
 import type { Message } from "@/lib/types/message";
@@ -22,6 +23,7 @@ export default function ConversationDetailPage() {
   const {
     conversation,
     isLoading: conversationLoading,
+    isRefreshing: conversationRefreshing,
     error: conversationError,
     refresh: refreshConversation,
   } = useConversation(conversationId);
@@ -29,13 +31,28 @@ export default function ConversationDetailPage() {
   const {
     messages,
     isLoading: messagesLoading,
+    isRefreshing: messagesRefreshing,
     error: messagesError,
     refresh: refreshMessages,
   } = useMessages(conversationId, true);
 
+  const { onConversationUpdate } = useAdminWebSocket();
   const [actionError, setActionError] = useState<string | null>(null);
   const isLoading = conversationLoading || messagesLoading;
+  const isRefreshing = conversationRefreshing || messagesRefreshing;
   const error = conversationError || messagesError || actionError;
+
+  // Listen for WebSocket updates for this conversation
+  useEffect(() => {
+    const unsubscribe = onConversationUpdate((updatedConversation: Conversation) => {
+      if (updatedConversation.conversation_id === conversationId) {
+        refreshConversation();
+        refreshMessages();
+      }
+    });
+
+    return unsubscribe;
+  }, [conversationId, onConversationUpdate, refreshConversation, refreshMessages]);
 
   const handleHandoff = async () => {
     try {
@@ -94,6 +111,11 @@ export default function ConversationDetailPage() {
 
   return (
     <div>
+      {isRefreshing && (
+        <div className="mb-2 text-xs text-gray-500 text-right">
+          Updating...
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Conversation</h1>
