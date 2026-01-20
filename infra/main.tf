@@ -250,6 +250,55 @@ resource "aws_dynamodb_table" "audit_logs" {
   )
 }
 
+resource "aws_dynamodb_table" "sessions" {
+  name         = "doctor-agent-sessions"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key = "session_key"
+
+  attribute {
+    name = "session_key"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "Sessions"
+    }
+  )
+}
+
+resource "aws_dynamodb_table" "rag_documents" {
+  name         = "doctor-agent-rag-documents"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key  = "agent_id"
+  range_key = "document_id"
+
+  attribute {
+    name = "agent_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "document_id"
+    type = "S"
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "RAGDocuments"
+    }
+  )
+}
+
 # Secrets Manager
 
 resource "aws_secretsmanager_secret" "openai" {

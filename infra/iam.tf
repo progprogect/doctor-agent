@@ -106,22 +106,16 @@ resource "aws_iam_role_policy" "ecs_task" {
           aws_dynamodb_table.messages.arn,
           aws_dynamodb_table.channel_bindings.arn,
           aws_dynamodb_table.audit_logs.arn,
+          aws_dynamodb_table.sessions.arn,
+          aws_dynamodb_table.rag_documents.arn,
           "${aws_dynamodb_table.agents.arn}/*",
           "${aws_dynamodb_table.conversations.arn}/*",
           "${aws_dynamodb_table.messages.arn}/*",
           "${aws_dynamodb_table.channel_bindings.arn}/*",
-          "${aws_dynamodb_table.audit_logs.arn}/*"
+          "${aws_dynamodb_table.audit_logs.arn}/*",
+          "${aws_dynamodb_table.sessions.arn}/*",
+          "${aws_dynamodb_table.rag_documents.arn}/*"
         ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "es:ESHttpPost",
-          "es:ESHttpPut",
-          "es:ESHttpGet",
-          "es:ESHttpHead"
-        ]
-        Resource = var.enable_opensearch && length(aws_opensearch_domain.main) > 0 ? "${aws_opensearch_domain.main[0].arn}/*" : "*"
       },
       {
         Effect = "Allow"

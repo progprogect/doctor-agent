@@ -4,8 +4,7 @@ from fastapi import Depends
 
 from app.config import Settings, get_settings
 from app.storage.dynamodb import DynamoDBClient, get_dynamodb_client
-from app.storage.opensearch import OpenSearchClient, get_opensearch_client
-from app.storage.redis import RedisClient, get_redis_client
+from app.storage.dynamodb_cache import DynamoDBCacheClient, get_dynamodb_cache_client
 from app.storage.secrets import SecretsManager, get_secrets_manager
 from app.services.llm_factory import LLMFactory, get_llm_factory
 from app.services.moderation_service import ModerationService, get_moderation_service
@@ -22,14 +21,9 @@ def get_dynamodb() -> DynamoDBClient:
     return get_dynamodb_client()
 
 
-def get_opensearch() -> OpenSearchClient:
-    """Get OpenSearch client."""
-    return get_opensearch_client()
-
-
-def get_redis() -> RedisClient:
-    """Get Redis client."""
-    return get_redis_client()
+def get_cache() -> DynamoDBCacheClient:
+    """Get DynamoDB cache client."""
+    return get_dynamodb_cache_client()
 
 
 def get_secrets() -> SecretsManager:
@@ -56,9 +50,9 @@ class CommonDependencies:
         self,
         config: Settings = Depends(get_config),
         dynamodb: DynamoDBClient = Depends(get_dynamodb),
-        redis: RedisClient = Depends(get_redis),
+        cache: DynamoDBCacheClient = Depends(get_cache),
     ):
         self.config = config
         self.dynamodb = dynamodb
-        self.redis = redis
+        self.cache = cache
 

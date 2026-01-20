@@ -20,6 +20,8 @@ output "dynamodb_tables" {
     conversations    = aws_dynamodb_table.conversations.name
     messages         = aws_dynamodb_table.messages.name
     channel_bindings = aws_dynamodb_table.channel_bindings.name
+    sessions         = aws_dynamodb_table.sessions.name
+    rag_documents    = aws_dynamodb_table.rag_documents.name
   }
 }
 
@@ -36,11 +38,6 @@ output "opensearch_domain_endpoint" {
 output "opensearch_domain_arn" {
   description = "OpenSearch domain ARN"
   value       = var.enable_opensearch && length(aws_opensearch_domain.main) > 0 ? aws_opensearch_domain.main[0].arn : null
-}
-
-output "opensearch_secret_arn" {
-  description = "ARN of OpenSearch password secret"
-  value       = aws_secretsmanager_secret.opensearch.arn
 }
 
 output "instagram_webhook_verify_token_secret_arn" {

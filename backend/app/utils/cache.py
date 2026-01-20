@@ -4,29 +4,29 @@ import inspect
 from functools import wraps
 from typing import Any, Callable, Optional
 
-from app.storage.redis import RedisClient, get_redis_client
+from app.storage.dynamodb_cache import DynamoDBCacheClient, get_dynamodb_cache_client
 
 
 class CacheService:
     """Service for caching data."""
 
-    def __init__(self, redis: RedisClient):
+    def __init__(self, cache_client: DynamoDBCacheClient):
         """Initialize cache service."""
-        self.redis = redis
+        self.cache = cache_client
 
     async def get(self, key: str) -> Optional[str]:
         """Get value from cache."""
-        return await self.redis.get(key)
+        return await self.cache.get(key)
 
     async def set(
         self, key: str, value: str, ttl: Optional[int] = None
     ) -> bool:
         """Set value in cache."""
-        return await self.redis.set(key, value, ttl)
+        return await self.cache.set(key, value, ttl)
 
     async def delete(self, key: str) -> bool:
         """Delete value from cache."""
-        result = await self.redis.delete(key)
+        result = await self.cache.delete(key)
         return result > 0
 
     async def get_or_set(
@@ -59,7 +59,7 @@ def cached(ttl: int = 300, key_prefix: str = ""):
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
-            cache = CacheService(get_redis_client())
+            cache = CacheService(get_dynamodb_cache_client())
             cache_key = f"{key_prefix}:{func.__name__}:{str(args)}:{str(kwargs)}"
 
             cached_value = await cache.get(cache_key)

@@ -74,37 +74,12 @@ resource "aws_ecs_task_definition" "backend" {
           value = aws_dynamodb_table.audit_logs.name
         },
         {
-          name  = "OPENSEARCH_ENDPOINT"
-          value = var.enable_opensearch && length(aws_opensearch_domain.main) > 0 ? "https://${aws_opensearch_domain.main[0].endpoint}" : ""
-        },
-        {
-          name  = "OPENSEARCH_USE_SSL"
-          value = "true"
-        },
-        {
-          name  = "OPENSEARCH_USERNAME"
-          value = var.opensearch_master_user_name
-        },
-        {
           name  = "SECRETS_MANAGER_OPENAI_KEY_NAME"
           value = aws_secretsmanager_secret.openai.name
         }
-      ], var.redis_num_cache_nodes > 0 && length(aws_elasticache_replication_group.redis) > 0 ? [
-        {
-          name  = "REDIS_HOST"
-          value = aws_elasticache_replication_group.redis[0].configuration_endpoint_address
-        },
-        {
-          name  = "REDIS_PORT"
-          value = "6379"
-        }
-      ] : [])
+      ])
 
       secrets = [
-        {
-          name      = "OPENSEARCH_PASSWORD"
-          valueFrom = aws_secretsmanager_secret.opensearch.arn
-        },
         {
           name      = "OPENAI_API_KEY"
           valueFrom = aws_secretsmanager_secret.openai.arn
@@ -167,14 +142,6 @@ resource "aws_ecs_service" "backend" {
     aws_iam_role_policy.ecs_execution,
     aws_iam_role_policy.ecs_task
   ]
-
-  tags = local.common_tags
-}
-
-# Secrets Manager secret for OpenSearch password
-resource "aws_secretsmanager_secret" "opensearch" {
-  name        = "doctor-agent/opensearch"
-  description = "OpenSearch master password for Doctor Agent"
 
   tags = local.common_tags
 }

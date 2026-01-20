@@ -6,7 +6,7 @@ from langchain_openai import OpenAIEmbeddings
 
 from app.config import get_settings
 from app.services.llm_factory import LLMFactory
-from app.storage.opensearch import OpenSearchClient
+from app.storage.dynamodb_rag import DynamoDBRAGClient
 
 
 class RAGChain:
@@ -15,11 +15,11 @@ class RAGChain:
     def __init__(
         self,
         llm_factory: LLMFactory,
-        opensearch_client: OpenSearchClient,
+        rag_client: DynamoDBRAGClient,
     ):
         """Initialize RAG chain."""
         self.llm_factory = llm_factory
-        self.opensearch_client = opensearch_client
+        self.rag_client = rag_client
         self._embeddings: Optional[OpenAIEmbeddings] = None
 
     async def _get_embeddings(self, agent_id: Optional[str] = None) -> OpenAIEmbeddings:
@@ -46,8 +46,8 @@ class RAGChain:
         embeddings = await self._get_embeddings(agent_id)
         query_embedding = await embeddings.aembed_query(query)
 
-        # Search in OpenSearch
-        results = await self.opensearch_client.search(
+        # Search in DynamoDB
+        results = await self.rag_client.search(
             index_name=index_name,
             query_embedding=query_embedding,
             agent_id=agent_id,

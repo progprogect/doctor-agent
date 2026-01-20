@@ -7,7 +7,7 @@ from typing import Optional
 from app.api.exceptions import RAGServiceError
 from app.chains.rag_chain import RAGChain
 from app.services.llm_factory import LLMFactory, get_llm_factory
-from app.storage.opensearch import OpenSearchClient, get_opensearch_client
+from app.storage.dynamodb_rag import DynamoDBRAGClient, get_dynamodb_rag_client
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +18,12 @@ class RAGService:
     def __init__(
         self,
         llm_factory: LLMFactory,
-        opensearch_client: OpenSearchClient,
+        rag_client: DynamoDBRAGClient,
     ):
         """Initialize RAG service."""
         self.llm_factory = llm_factory
-        self.opensearch_client = opensearch_client
-        self.rag_chain = RAGChain(llm_factory, opensearch_client)
+        self.rag_client = rag_client
+        self.rag_chain = RAGChain(llm_factory, rag_client)
 
     async def index_documents(
         self,
@@ -36,8 +36,8 @@ class RAGService:
             if index_name is None:
                 index_name = f"agent_{agent_id}_documents"
 
-            # Ensure index exists
-            await self.opensearch_client.create_index(
+            # Ensure index exists (no-op for DynamoDB, table created via Terraform)
+            await self.rag_client.create_index(
                 index_name=index_name,
                 vector_dimension=1536,  # Default for text-embedding-3-small
             )
@@ -86,7 +86,7 @@ class RAGService:
                 return 0, len(documents)
 
             # Bulk index
-            success_count, failed_count = await self.opensearch_client.bulk_index_documents(
+            success_count, failed_count = await self.rag_client.bulk_index_documents(
                 index_name=index_name,
                 documents=indexed_docs,
             )
@@ -185,7 +185,7 @@ class RAGService:
         if index_name is None:
             index_name = f"agent_{agent_id}_documents"
 
-        return await self.opensearch_client.delete_documents_by_agent(
+        return await self.rag_client.delete_documents_by_agent(
             index_name=index_name,
             agent_id=agent_id,
         )
@@ -195,6 +195,6 @@ class RAGService:
 def get_rag_service() -> RAGService:
     """Get cached RAG service instance."""
     llm_factory = get_llm_factory()
-    opensearch_client = get_opensearch_client()
-    return RAGService(llm_factory, opensearch_client)
+    rag_client = get_dynamodb_rag_client()
+    return RAGService(llm_factory, rag_client)
 
