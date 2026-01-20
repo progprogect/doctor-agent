@@ -298,28 +298,61 @@ async def send_admin_message(
         )
 
         # #region agent log
-        import json
-        with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B","location":"admin.py:300","message":"Before create_message","data":{"conversation_id":conversation_id,"message_id":message_id,"content":request.content[:50]},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        try:
+            import json
+            import os
+            log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+            if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B","location":"admin.py:300","message":"Before create_message","data":{"conversation_id":conversation_id,"message_id":message_id,"content":request.content[:50]},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except Exception:
+            pass
         # #endregion
         await deps.dynamodb.create_message(admin_message)
         # #region agent log
-        with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B","location":"admin.py:302","message":"After create_message","data":{"conversation_id":conversation_id,"message_id":message_id},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        try:
+            import json
+            import os
+            log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+            if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B","location":"admin.py:302","message":"After create_message","data":{"conversation_id":conversation_id,"message_id":message_id},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except Exception:
+            pass
         # #endregion
         
         # Verify message was saved by reading it back
         # #region agent log
-        verify_msg = await deps.dynamodb.get_message(message_id)
-        with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"admin.py:307","message":"Message verification after save","data":{"message_id":message_id,"found":verify_msg is not None,"role":verify_msg.role.value if verify_msg and hasattr(verify_msg.role, 'value') else str(verify_msg.role) if verify_msg else None},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        try:
+            verify_msg = await deps.dynamodb.get_message(message_id)
+            import json
+            import os
+            log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+            if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                role_str = None
+                if verify_msg:
+                    try:
+                        role_str = verify_msg.role.value if hasattr(verify_msg.role, 'value') else str(verify_msg.role)
+                    except:
+                        role_str = 'unknown'
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"admin.py:307","message":"Message verification after save","data":{"message_id":message_id,"found":verify_msg is not None,"role":role_str},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except Exception:
+            pass
         # #endregion
         
         # Check messages list immediately after save
         # #region agent log
-        msgs_after_save = await deps.dynamodb.list_messages(conversation_id, limit=100)
-        with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"admin.py:313","message":"Messages list after save","data":{"conversation_id":conversation_id,"count":len(msgs_after_save),"message_ids":[m.message_id for m in msgs_after_save[:5]],"contains_new":message_id in [m.message_id for m in msgs_after_save]},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        try:
+            msgs_after_save = await deps.dynamodb.list_messages(conversation_id, limit=100)
+            import json
+            import os
+            log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+            if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"admin.py:313","message":"Messages list after save","data":{"conversation_id":conversation_id,"count":len(msgs_after_save),"message_ids":[m.message_id for m in msgs_after_save[:5]],"contains_new":message_id in [m.message_id for m in msgs_after_save]},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except Exception:
+            pass
         # #endregion
 
         # Determine channel and send message accordingly

@@ -299,9 +299,15 @@ class DynamoDBClient:
     ) -> list[Message]:
         """List messages for a conversation."""
         # #region agent log
-        import json
-        with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:300","message":"list_messages entry","data":{"conversation_id":conversation_id,"limit":limit,"reverse":reverse},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        try:
+            import json
+            import os
+            log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+            if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:300","message":"list_messages entry","data":{"conversation_id":conversation_id,"limit":limit,"reverse":reverse},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except Exception:
+            pass
         # #endregion
         # For MVP, using query on conversation_id (requires GSI)
         # Fallback to scan if GSI not available
@@ -317,14 +323,28 @@ class DynamoDBClient:
             items = response.get("Items", [])
             method_used = "query"
             # #region agent log
-            with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:312","message":"Query succeeded","data":{"conversation_id":conversation_id,"items_count":len(items)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            try:
+                import json
+                import os
+                log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+                if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                    with open(log_path, 'a') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:312","message":"Query succeeded","data":{"conversation_id":conversation_id,"items_count":len(items)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except Exception:
+                pass
             # #endregion
         except ClientError as e:
             method_used = "scan"
             # #region agent log
-            with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:318","message":"Query failed, using scan","data":{"conversation_id":conversation_id,"error":str(e)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            try:
+                import json
+                import os
+                log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+                if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                    with open(log_path, 'a') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:318","message":"Query failed, using scan","data":{"conversation_id":conversation_id,"error":str(e)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except Exception:
+                pass
             # #endregion
             # Fallback to scan if GSI doesn't exist
             # Don't pass ExpressionAttributeNames if it's empty - DynamoDB doesn't accept empty dict
@@ -338,23 +358,37 @@ class DynamoDBClient:
             # Sort by timestamp
             items.sort(key=lambda x: x.get("timestamp", ""), reverse=reverse)
             # #region agent log
-            with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:327","message":"Scan completed","data":{"conversation_id":conversation_id,"items_count":len(items)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            try:
+                import json
+                import os
+                log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+                if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                    with open(log_path, 'a') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:327","message":"Scan completed","data":{"conversation_id":conversation_id,"items_count":len(items)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except Exception:
+                pass
             # #endregion
 
         result = [Message(**item) for item in items]
         # #region agent log
         try:
-            from app.utils.enum_helpers import get_enum_value
-            roles_list = []
-            for m in result[:5]:
-                try:
-                    roles_list.append(get_enum_value(m.role))
-                except:
-                    roles_list.append(str(m.role) if hasattr(m, 'role') else 'unknown')
             with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,E","location":"dynamodb.py:330","message":"list_messages exit","data":{"conversation_id":conversation_id,"method":method_used,"count":len(result),"message_ids":[m.message_id for m in result[:5]],"roles":roles_list},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-        except Exception as log_err:
+                log_data = {
+                    "sessionId":"debug-session",
+                    "runId":"run1",
+                    "hypothesisId":"A,E",
+                    "location":"dynamodb.py:345",
+                    "message":"list_messages exit",
+                    "data":{
+                        "conversation_id":conversation_id,
+                        "method":method_used,
+                        "count":len(result),
+                        "message_ids":[m.message_id for m in result[:5]] if result else []
+                    },
+                    "timestamp":int(__import__('time').time()*1000)
+                }
+                f.write(json.dumps(log_data) + '\n')
+        except Exception:
             # Don't fail if logging fails
             pass
         # #endregion

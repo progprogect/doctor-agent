@@ -314,14 +314,34 @@ async def get_messages(
         raise ConversationNotFoundError(conversation_id)
 
     # #region agent log
-    import json
-    with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C","location":"chat.py:314","message":"Before list_messages","data":{"conversation_id":conversation_id,"limit":limit},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+    try:
+        import json
+        import os
+        log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+        if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C","location":"chat.py:314","message":"Before list_messages","data":{"conversation_id":conversation_id,"limit":limit},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+    except Exception:
+        pass
     # #endregion
     messages = await deps.dynamodb.list_messages(conversation_id, limit=limit)
     # #region agent log
-    with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C","location":"chat.py:317","message":"After list_messages","data":{"conversation_id":conversation_id,"count":len(messages),"message_ids":[m.message_id for m in messages[:5]],"roles":[get_enum_value(m.role) for m in messages[:5]]},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+    try:
+        import json
+        import os
+        from app.utils.enum_helpers import get_enum_value
+        log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+        if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+            roles_list = []
+            for m in messages[:5]:
+                try:
+                    roles_list.append(get_enum_value(m.role))
+                except:
+                    roles_list.append(str(m.role) if hasattr(m, 'role') else 'unknown')
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,C","location":"chat.py:317","message":"After list_messages","data":{"conversation_id":conversation_id,"count":len(messages),"message_ids":[m.message_id for m in messages[:5]],"roles":roles_list},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+    except Exception:
+        pass
     # #endregion
     return messages
 
