@@ -12,6 +12,7 @@ import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { api } from "@/lib/api";
 import Link from "next/link";
 import type { Conversation } from "@/lib/types/conversation";
+import { getChannelDisplay } from "@/lib/utils/channelDisplay";
 
 export default function ConversationsPage() {
   const router = useRouter();
@@ -150,6 +151,9 @@ export default function ConversationsPage() {
                   Agent ID
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
+                  Channel
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
@@ -195,6 +199,9 @@ export default function ConversationsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {conv.agent_id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {getChannelDisplay(conv.channel)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span

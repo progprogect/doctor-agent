@@ -15,6 +15,7 @@ import { useAdminWebSocket } from "@/lib/hooks/useAdminWebSocket";
 import { handleApiError, getUserFriendlyMessage } from "@/lib/errorHandler";
 import type { Conversation } from "@/lib/types/conversation";
 import type { Message } from "@/lib/types/message";
+import { getChannelDisplay, isInstagramChannel } from "@/lib/utils/channelDisplay";
 
 export default function ConversationDetailPage() {
   const params = useParams();
@@ -148,6 +149,28 @@ export default function ConversationDetailPage() {
             <p className="text-sm text-gray-500">Agent ID</p>
             <p className="text-sm font-medium text-gray-900">{conversation.agent_id}</p>
           </div>
+          <div>
+            <p className="text-sm text-gray-500">Channel</p>
+            <p className="text-sm font-medium text-gray-900">
+              {getChannelDisplay(conversation.channel)}
+            </p>
+          </div>
+          {isInstagramChannel(conversation.channel) && (
+            <>
+              {conversation.external_user_id && (
+                <div>
+                  <p className="text-sm text-gray-500">Instagram User ID</p>
+                  <p className="text-sm font-medium text-gray-900">{conversation.external_user_id}</p>
+                </div>
+              )}
+              {conversation.external_conversation_id && (
+                <div>
+                  <p className="text-sm text-gray-500">Instagram Thread ID</p>
+                  <p className="text-sm font-medium text-gray-900">{conversation.external_conversation_id}</p>
+                </div>
+              )}
+            </>
+          )}
           {conversation.handoff_reason && (
             <div>
               <p className="text-sm text-gray-500">Handoff Reason</p>

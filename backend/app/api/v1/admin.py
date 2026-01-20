@@ -1,5 +1,6 @@
 """Admin API endpoints."""
 
+import logging
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -12,10 +13,17 @@ from app.api.auth import require_admin
 from app.api.exceptions import ConversationNotFoundError
 from app.api.schemas import ConversationIDValidator
 from app.api.websocket import connection_manager
+from app.config import get_settings
 from app.dependencies import CommonDependencies
 from app.models.conversation import ConversationStatus
 from app.models.message import Message, MessageChannel, MessageRole
+from app.services.channel_binding_service import ChannelBindingService
+from app.services.channel_sender import get_channel_sender
+from app.services.instagram_service import InstagramService
+from app.storage.secrets import get_secrets_manager
 from app.utils.enum_helpers import get_enum_value
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -117,8 +125,6 @@ async def handoff_conversation(
             message="Conversation handed off to human",
         )
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Error handing off conversation: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -179,8 +185,6 @@ async def return_to_ai(
             "message": "Conversation returned to AI",
         }
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Error returning conversation to AI: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -273,23 +277,61 @@ async def send_admin_message(
 
         await deps.dynamodb.create_message(admin_message)
 
-        # Send via WebSocket if connected (don't fail if WebSocket is not connected)
-        try:
-            await connection_manager.send_message(
-                conversation_id,
-                {
-                    "type": "message",
-                    "message_id": message_id,
-                    "role": "admin",
-                    "content": request.content,
-                    "timestamp": admin_message.timestamp.isoformat(),
-                },
-            )
-        except Exception as ws_error:
-            # Log but don't fail the request if WebSocket fails
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to send message via WebSocket: {ws_error}")
+        # Determine channel and send message accordingly
+        conversation_channel = get_enum_value(conversation.channel)
+        
+        if conversation_channel == MessageChannel.INSTAGRAM.value:
+            # Send via Instagram API for Instagram conversations
+            try:
+                # Create Instagram service and sender
+                settings = get_settings()
+                secrets_manager = get_secrets_manager()
+                binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
+                instagram_service = InstagramService(binding_service, deps.dynamodb, settings)
+                
+                # Convert string back to enum for get_channel_sender
+                channel_enum = MessageChannel(conversation_channel) if isinstance(conversation_channel, str) else conversation.channel
+                instagram_sender = get_channel_sender(
+                    channel_enum, deps.dynamodb, instagram_service
+                )
+                
+                # Send message via Instagram API
+                await instagram_sender.send_message(
+                    conversation_id=conversation_id,
+                    message_text=request.content,
+                )
+                
+                logger.info(f"Sent admin message to Instagram conversation {conversation_id}")
+            except ValueError as e:
+                # No binding or missing external_user_id - return clear error
+                logger.error(f"Failed to send Instagram message: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot send message to Instagram conversation: {str(e)}",
+                )
+            except Exception as instagram_error:
+                # Instagram API error - log but don't fail (message already saved)
+                logger.error(
+                    f"Failed to send message via Instagram API: {instagram_error}",
+                    exc_info=True,
+                )
+                # Message is already saved in DB, so we continue
+        else:
+            # Send via WebSocket for web chat (don't fail if WebSocket is not connected)
+            try:
+                await connection_manager.send_message(
+                    conversation_id,
+                    {
+                        "type": "message",
+                        "message_id": message_id,
+                        "role": "admin",
+                        "content": request.content,
+                        "timestamp": admin_message.timestamp.isoformat(),
+                    },
+                )
+            except Exception as ws_error:
+                # Log but don't fail the request if WebSocket fails
+                logger.warning(f"Failed to send message via WebSocket: {ws_error}")
 
         # Create audit log
         await deps.dynamodb.create_audit_log(
@@ -309,8 +351,6 @@ async def send_admin_message(
             timestamp=admin_message.timestamp.isoformat(),
         )
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Error sending admin message: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
