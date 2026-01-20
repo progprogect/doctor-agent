@@ -372,22 +372,26 @@ class DynamoDBClient:
         result = [Message(**item) for item in items]
         # #region agent log
         try:
-            with open('/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log', 'a') as f:
-                log_data = {
-                    "sessionId":"debug-session",
-                    "runId":"run1",
-                    "hypothesisId":"A,E",
-                    "location":"dynamodb.py:345",
-                    "message":"list_messages exit",
-                    "data":{
-                        "conversation_id":conversation_id,
-                        "method":method_used,
-                        "count":len(result),
-                        "message_ids":[m.message_id for m in result[:5]] if result else []
-                    },
-                    "timestamp":int(__import__('time').time()*1000)
-                }
-                f.write(json.dumps(log_data) + '\n')
+            import json
+            import os
+            log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
+            if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
+                with open(log_path, 'a') as f:
+                    log_data = {
+                        "sessionId":"debug-session",
+                        "runId":"run1",
+                        "hypothesisId":"A,E",
+                        "location":"dynamodb.py:345",
+                        "message":"list_messages exit",
+                        "data":{
+                            "conversation_id":conversation_id,
+                            "method":method_used,
+                            "count":len(result),
+                            "message_ids":[m.message_id for m in result[:5]] if result else []
+                        },
+                        "timestamp":int(__import__('time').time()*1000)
+                    }
+                    f.write(json.dumps(log_data) + '\n')
         except Exception:
             # Don't fail if logging fails
             pass
