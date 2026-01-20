@@ -54,7 +54,6 @@ resource "aws_iam_role_policy" "ecs_execution" {
         ]
         Resource = [
           aws_secretsmanager_secret.openai.arn,
-          aws_secretsmanager_secret.opensearch.arn,
           aws_secretsmanager_secret.instagram_webhook_verify_token.arn
         ]
       }
@@ -82,7 +81,7 @@ resource "aws_iam_role" "ecs_task" {
   tags = local.common_tags
 }
 
-# IAM Policy for ECS Task (DynamoDB, OpenSearch, Redis access)
+# IAM Policy for ECS Task (DynamoDB access)
 resource "aws_iam_role_policy" "ecs_task" {
   name = "doctor-agent-ecs-task-policy"
   role = aws_iam_role.ecs_task.id

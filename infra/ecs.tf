@@ -74,6 +74,14 @@ resource "aws_ecs_task_definition" "backend" {
           value = aws_dynamodb_table.audit_logs.name
         },
         {
+          name  = "DYNAMODB_TABLE_SESSIONS"
+          value = aws_dynamodb_table.sessions.name
+        },
+        {
+          name  = "DYNAMODB_TABLE_RAG_DOCUMENTS"
+          value = aws_dynamodb_table.rag_documents.name
+        },
+        {
           name  = "SECRETS_MANAGER_OPENAI_KEY_NAME"
           value = aws_secretsmanager_secret.openai.name
         }
