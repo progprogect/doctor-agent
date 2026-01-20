@@ -303,76 +303,15 @@ class DynamoDBClient:
         reverse: bool = True,
     ) -> list[Message]:
         """List messages for a conversation."""
-        # #region agent log
-        try:
-            import json
-            import os
-            log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
-            if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
-                with open(log_path, 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:300","message":"list_messages entry","data":{"conversation_id":conversation_id,"limit":limit,"reverse":reverse},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-        except Exception:
-            pass
-        # #endregion
-        # For MVP, using query on conversation_id (requires GSI)
-        # Fallback to scan if GSI not available
-        method_used = None
-        try:
-            response = self.tables["messages"].query(
-                IndexName="conversation_id-index",  # Requires GSI
-                KeyConditionExpression="conversation_id = :conv_id",
-                ExpressionAttributeValues={":conv_id": conversation_id},
-                Limit=limit,
-                ScanIndexForward=not reverse,
-            )
-            items = response.get("Items", [])
-            method_used = "query"
-            # #region agent log
-            try:
-                import json
-                import os
-                log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
-                if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
-                    with open(log_path, 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:312","message":"Query succeeded","data":{"conversation_id":conversation_id,"items_count":len(items)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except Exception:
-                pass
-            # #endregion
-        except ClientError as e:
-            method_used = "scan"
-            # #region agent log
-            try:
-                import json
-                import os
-                log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
-                if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
-                    with open(log_path, 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:318","message":"Query failed, using scan","data":{"conversation_id":conversation_id,"error":str(e)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except Exception:
-                pass
-            # #endregion
-            # Fallback to scan if GSI doesn't exist
-            # Don't pass ExpressionAttributeNames if it's empty - DynamoDB doesn't accept empty dict
-            scan_kwargs = {
-                "FilterExpression": "conversation_id = :conv_id",
-                "ExpressionAttributeValues": {":conv_id": conversation_id},
-                "Limit": limit,
-            }
-            response = self.tables["messages"].scan(**scan_kwargs)
-            items = response.get("Items", [])
-            # Sort by timestamp
-            items.sort(key=lambda x: x.get("timestamp", ""), reverse=reverse)
-            # #region agent log
-            try:
-                import json
-                import os
-                log_path = '/Users/mikitavalkunovich/Desktop/Doctor Agent/doctor-agent/.cursor/debug.log'
-                if os.path.exists(os.path.dirname(log_path)) or os.path.exists('/Users/mikitavalkunovich'):
-                    with open(log_path, 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"dynamodb.py:327","message":"Scan completed","data":{"conversation_id":conversation_id,"items_count":len(items)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except Exception:
-                pass
-            # #endregion
+        # Use query on the primary key (conversation_id is the partition key)
+        # Since conversation_id is the partition key, we can query directly without GSI
+        response = self.tables["messages"].query(
+            KeyConditionExpression="conversation_id = :conv_id",
+            ExpressionAttributeValues={":conv_id": conversation_id},
+            Limit=limit,
+            ScanIndexForward=not reverse,  # False = descending (newest first), True = ascending
+        )
+        items = response.get("Items", [])
 
         result = [Message(**item) for item in items]
         # #region agent log
