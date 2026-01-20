@@ -283,9 +283,14 @@ class DynamoDBClient:
         self.tables["messages"].put_item(Item=item)
         return message
 
-    async def get_message(self, message_id: str) -> Optional[Message]:
-        """Get message by ID."""
-        response = self.tables["messages"].get_item(Key={"message_id": message_id})
+    async def get_message(self, conversation_id: str, message_id: str) -> Optional[Message]:
+        """Get message by conversation ID and message ID."""
+        response = self.tables["messages"].get_item(
+            Key={
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+            }
+        )
         item = response.get("Item")
         if not item:
             return None

@@ -302,7 +302,7 @@ async def send_admin_message(
         logger.info(f"Admin message created successfully: message_id={message_id}")
         
         # Verify message was saved by reading it back
-        verify_msg = await deps.dynamodb.get_message(message_id)
+        verify_msg = await deps.dynamodb.get_message(conversation_id, message_id)
         if verify_msg:
             logger.info(f"Message verification: message_id={message_id}, found=True, role={get_enum_value(verify_msg.role)}")
         else:
