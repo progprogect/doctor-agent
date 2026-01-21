@@ -314,6 +314,35 @@ class DynamoDBClient:
         items = response.get("Items", [])
 
         result = [Message(**item) for item in items]
+        
+        # Сортировка по timestamp для правильного хронологического порядка
+        # Обрабатываем случаи, когда timestamp может быть строкой или datetime
+        def get_timestamp(msg: Message) -> datetime:
+            """Extract timestamp from message, handling both datetime and string formats."""
+            ts = msg.timestamp
+            if isinstance(ts, datetime):
+                return ts
+            elif isinstance(ts, str):
+                try:
+                    # Обрабатываем ISO формат с 'Z' или без timezone
+                    ts_clean = ts.replace('Z', '+00:00')
+                    return datetime.fromisoformat(ts_clean)
+                except (ValueError, AttributeError):
+                    # Fallback to current time if parsing fails
+                    logger.warning(f"Failed to parse timestamp '{ts}', using current time")
+                    return datetime.utcnow()
+            else:
+                # Fallback for any other type
+                logger.warning(f"Unexpected timestamp type: {type(ts)}, using current time")
+                return datetime.utcnow()
+        
+        # Сортировка: старые → новые (хронологический порядок)
+        result.sort(key=get_timestamp)
+        
+        # Если reverse=True был запрошен, разворачиваем список после сортировки
+        if reverse:
+            result.reverse()
+        
         # #region agent log
         try:
             import json

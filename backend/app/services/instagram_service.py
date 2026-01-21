@@ -203,6 +203,29 @@ class InstagramService:
             external_conversation_id=None,  # Instagram doesn't provide thread ID in this format
         )
 
+        # Проверяем, есть ли timestamp в webhook событии
+        # Instagram может предоставлять время в разных полях:
+        # - event.get("timestamp") - время события (в миллисекундах Unix epoch)
+        # - entry.get("time") - время входа (если доступно)
+        webhook_timestamp = None
+        if "timestamp" in event:
+            try:
+                # Instagram timestamp обычно в миллисекундах Unix epoch
+                timestamp_ms = event["timestamp"]
+                if isinstance(timestamp_ms, (int, float)):
+                    webhook_timestamp = datetime.utcfromtimestamp(int(timestamp_ms) / 1000)
+                    logger.info(f"Using timestamp from Instagram webhook: {webhook_timestamp} (from {timestamp_ms} ms)")
+                elif isinstance(timestamp_ms, str):
+                    # Попытка парсинга строки
+                    webhook_timestamp = datetime.utcfromtimestamp(int(timestamp_ms) / 1000)
+                    logger.info(f"Using timestamp from Instagram webhook (parsed from string): {webhook_timestamp}")
+            except (ValueError, TypeError, KeyError) as e:
+                logger.warning(f"Failed to parse Instagram webhook timestamp: {e}, using current time")
+                webhook_timestamp = None
+
+        # Используем timestamp из webhook, если доступен, иначе текущее время
+        message_timestamp = webhook_timestamp if webhook_timestamp else datetime.utcnow()
+
         # Create user message
         user_message = Message(
             message_id=str(uuid.uuid4()),
@@ -213,7 +236,7 @@ class InstagramService:
             channel=MessageChannel.INSTAGRAM,
             external_message_id=message_id,
             external_user_id=sender_id,
-            timestamp=datetime.utcnow(),
+            timestamp=message_timestamp,  # Используем улучшенный timestamp
         )
 
         await self.dynamodb.create_message(user_message)
