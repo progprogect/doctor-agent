@@ -82,6 +82,10 @@ resource "aws_ecs_task_definition" "backend" {
           value = aws_dynamodb_table.rag_documents.name
         },
         {
+          name  = "DYNAMODB_TABLE_INSTAGRAM_PROFILES"
+          value = aws_dynamodb_table.instagram_profiles.name
+        },
+        {
           name  = "SECRETS_MANAGER_OPENAI_KEY_NAME"
           value = aws_secretsmanager_secret.openai.name
         }

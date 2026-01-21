@@ -301,6 +301,30 @@ resource "aws_dynamodb_table" "rag_documents" {
   )
 }
 
+resource "aws_dynamodb_table" "instagram_profiles" {
+  name         = "doctor-agent-instagram-profiles"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key = "external_user_id"
+
+  attribute {
+    name = "external_user_id"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "InstagramProfiles"
+    }
+  )
+}
+
 # Secrets Manager
 
 resource "aws_secretsmanager_secret" "openai" {
