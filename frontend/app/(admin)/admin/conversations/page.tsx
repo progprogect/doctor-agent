@@ -11,12 +11,14 @@ import { Select } from "@/components/shared/Select";
 import { Input } from "@/components/shared/Input";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { MarketingStatusBadge } from "@/components/shared/MarketingStatusBadge";
+import { MarketingStatusSelect } from "@/components/shared/MarketingStatusSelect";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Tooltip } from "@/components/shared/Tooltip";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { api } from "@/lib/api";
 import Link from "next/link";
-import type { Conversation } from "@/lib/types/conversation";
+import type { Conversation, MarketingStatus } from "@/lib/types/conversation";
 import type { Agent } from "@/lib/types/agent";
 import { getChannelDisplay } from "@/lib/utils/channelDisplay";
 import { getConversationDisplayId } from "@/lib/utils/conversationDisplay";
@@ -50,11 +52,13 @@ const ViewIcon = () => (
 export default function ConversationsPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<ConversationFilter>("all");
+  const [marketingStatusFilter, setMarketingStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [takeOverConversationId, setTakeOverConversationId] = useState<string | null>(null);
   const [isTakingOver, setIsTakingOver] = useState(false);
   const [agents, setAgents] = useState<Map<string, Agent>>(new Map());
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
+  const [updatingStatuses, setUpdatingStatuses] = useState<Set<string>>(new Set());
 
   const {
     conversations,
@@ -65,6 +69,7 @@ export default function ConversationsPage() {
     refresh,
   } = useConversationsList({
     filter,
+    marketingStatus: marketingStatusFilter !== "all" ? marketingStatusFilter : undefined,
     limit: 100,
     enablePolling: true,
   });
@@ -122,6 +127,32 @@ export default function ConversationsPage() {
     }
   };
 
+  const handleMarketingStatusChange = async (
+    conversationId: string,
+    status: MarketingStatus,
+    rejectionReason?: string
+  ) => {
+    try {
+      setUpdatingStatuses((prev) => new Set(prev).add(conversationId));
+      await api.updateMarketingStatus(
+        conversationId,
+        status,
+        "admin_user",
+        rejectionReason
+      );
+      await refresh();
+    } catch (err) {
+      console.error("Failed to update marketing status:", err);
+      alert("Failed to update marketing status. Please try again.");
+    } finally {
+      setUpdatingStatuses((prev) => {
+        const next = new Set(prev);
+        next.delete(conversationId);
+        return next;
+      });
+    }
+  };
+
   const isNeedsHuman = (status: ConversationStatus) => status === "NEEDS_HUMAN";
 
   if (isLoading && conversations.length === 0) {
@@ -162,18 +193,33 @@ export default function ConversationsPage() {
             </span>
           </div>
 
-          {/* Filter dropdown */}
-          <div className="w-48">
-            <Select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as ConversationFilter)}
-              options={[
-                { value: "all", label: "All Conversations" },
-                { value: "needs_attention", label: "Requires Attention" },
-                { value: "active", label: "Active" },
-                { value: "closed", label: "Closed" },
-              ]}
-            />
+          {/* Filter dropdowns */}
+          <div className="flex items-center gap-2">
+            <div className="w-48">
+              <Select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as ConversationFilter)}
+                options={[
+                  { value: "all", label: "All Conversations" },
+                  { value: "needs_attention", label: "Requires Attention" },
+                  { value: "active", label: "Active" },
+                  { value: "closed", label: "Closed" },
+                ]}
+              />
+            </div>
+            <div className="w-48">
+              <Select
+                value={marketingStatusFilter}
+                onChange={(e) => setMarketingStatusFilter(e.target.value)}
+                options={[
+                  { value: "all", label: "All Marketing Statuses" },
+                  { value: "NEW", label: "New" },
+                  { value: "BOOKED", label: "Booked" },
+                  { value: "NO_RESPONSE", label: "No Response" },
+                  { value: "REJECTED", label: "Rejected" },
+                ]}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -221,6 +267,9 @@ export default function ConversationsPage() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
+                  Marketing Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Created
@@ -302,6 +351,27 @@ export default function ConversationsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <StatusBadge status={toConversationStatus(conv.status)} size="sm" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="min-w-[140px]">
+                        {updatingStatuses.has(conv.conversation_id) ? (
+                          <div className="flex items-center gap-2">
+                            <LoadingSpinner size="sm" />
+                            <span className="text-xs text-gray-500">Updating...</span>
+                          </div>
+                        ) : (
+                          <MarketingStatusSelect
+                            value={conv.marketing_status || "NEW"}
+                            onChange={(status, reason) =>
+                              handleMarketingStatusChange(conv.conversation_id, status, reason)
+                            }
+                            disabled={updatingStatuses.has(conv.conversation_id)}
+                            showRejectionReason={false}
+                            currentRejectionReason={conv.rejection_reason}
+                            className="w-full"
+                          />
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(conv.created_at)}

@@ -8,6 +8,8 @@ import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { MarketingStatusBadge } from "@/components/shared/MarketingStatusBadge";
+import { MarketingStatusSelect } from "@/components/shared/MarketingStatusSelect";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -16,7 +18,7 @@ import { useAdminConversation } from "@/lib/hooks/useAdminConversation";
 import { useMessages } from "@/lib/hooks/useMessages";
 import { useAdminWebSocket } from "@/lib/hooks/useAdminWebSocket";
 import { handleApiError, getUserFriendlyMessage } from "@/lib/errorHandler";
-import type { Conversation } from "@/lib/types/conversation";
+import type { Conversation, MarketingStatus } from "@/lib/types/conversation";
 import type { Message } from "@/lib/types/message";
 import type { Agent } from "@/lib/types/agent";
 import { getChannelDisplay, isInstagramChannel } from "@/lib/utils/channelDisplay";
@@ -51,6 +53,7 @@ export default function ConversationDetailPage() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [isLoadingAgent, setIsLoadingAgent] = useState(false);
   const [isRefreshingProfile, setIsRefreshingProfile] = useState(false);
+  const [isUpdatingMarketingStatus, setIsUpdatingMarketingStatus] = useState(false);
 
   const isLoading = conversationLoading || messagesLoading;
   const isRefreshing = conversationRefreshing || messagesRefreshing;
@@ -170,6 +173,28 @@ export default function ConversationDetailPage() {
       setActionError(getUserFriendlyMessage(errorInfo));
     } finally {
       setIsRefreshingProfile(false);
+    }
+  };
+
+  const handleMarketingStatusChange = async (
+    status: MarketingStatus,
+    rejectionReason?: string
+  ) => {
+    try {
+      setIsUpdatingMarketingStatus(true);
+      setActionError(null);
+      await api.updateMarketingStatus(
+        conversationId,
+        status,
+        "admin_user",
+        rejectionReason
+      );
+      await refreshConversation();
+    } catch (err) {
+      const errorInfo = handleApiError(err);
+      setActionError(getUserFriendlyMessage(errorInfo));
+    } finally {
+      setIsUpdatingMarketingStatus(false);
     }
   };
 
@@ -300,6 +325,39 @@ export default function ConversationDetailPage() {
                 </p>
               </div>
             )}
+            <div className="pt-2 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-2">Marketing Status</p>
+              {isUpdatingMarketingStatus ? (
+                <div className="flex items-center gap-2">
+                  <LoadingSpinner size="sm" />
+                  <span className="text-xs text-gray-500">Updating...</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {conversation.marketing_status && (
+                    <div>
+                      <MarketingStatusBadge
+                        status={conversation.marketing_status}
+                        size="md"
+                      />
+                    </div>
+                  )}
+                  <MarketingStatusSelect
+                    value={conversation.marketing_status || "NEW"}
+                    onChange={handleMarketingStatusChange}
+                    disabled={isUpdatingMarketingStatus}
+                    showRejectionReason={true}
+                    currentRejectionReason={conversation.rejection_reason}
+                  />
+                  {conversation.rejection_reason && conversation.marketing_status === "REJECTED" && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-sm">
+                      <p className="text-xs text-gray-500 mb-1">Rejection Reason:</p>
+                      <p className="text-sm text-gray-900">{conversation.rejection_reason}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             {isInstagramChannel(conversation.channel) && (
               <>
                 {/* Instagram User Profile Section */}

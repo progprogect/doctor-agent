@@ -18,6 +18,15 @@ class ConversationStatus(str, Enum):
     CLOSED = "CLOSED"
 
 
+class MarketingStatus(str, Enum):
+    """Marketing status of a conversation for CRM tracking."""
+
+    NEW = "NEW"
+    BOOKED = "BOOKED"
+    NO_RESPONSE = "NO_RESPONSE"
+    REJECTED = "REJECTED"
+
+
 class Conversation(BaseModel):
     """Conversation model."""
 
@@ -56,6 +65,13 @@ class Conversation(BaseModel):
     )
     external_user_profile_pic: Optional[str] = Field(
         None, description="Instagram profile picture URL"
+    )
+    # Marketing status fields for CRM tracking
+    marketing_status: Optional[MarketingStatus] = Field(
+        default=MarketingStatus.NEW, description="Marketing status for CRM tracking"
+    )
+    rejection_reason: Optional[str] = Field(
+        None, description="Reason for rejection (required when marketing_status is REJECTED)"
     )
 
     class Config:

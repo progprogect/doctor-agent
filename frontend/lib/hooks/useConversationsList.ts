@@ -11,6 +11,7 @@ export type ConversationFilter = "all" | "needs_attention" | "active" | "closed"
 interface UseConversationsListOptions {
   filter?: ConversationFilter;
   agentId?: string;
+  marketingStatus?: string;
   limit?: number;
   enablePolling?: boolean; // Fallback if WebSocket is not available
   pollingInterval?: number; // Polling interval in ms (default: 5000)
@@ -20,6 +21,7 @@ export function useConversationsList(options: UseConversationsListOptions = {}) 
   const {
     filter = "all",
     agentId,
+    marketingStatus,
     limit = 100,
     enablePolling = true,
     pollingInterval = 5000,
@@ -43,6 +45,7 @@ export function useConversationsList(options: UseConversationsListOptions = {}) 
       const params: {
         agent_id?: string;
         status?: string;
+        marketing_status?: string;
         limit?: number;
       } = {
         limit,
@@ -50,6 +53,10 @@ export function useConversationsList(options: UseConversationsListOptions = {}) 
 
       if (agentId) {
         params.agent_id = agentId;
+      }
+
+      if (marketingStatus) {
+        params.marketing_status = marketingStatus;
       }
 
       // Apply filter
@@ -97,7 +104,7 @@ export function useConversationsList(options: UseConversationsListOptions = {}) 
     } finally {
       setIsLoading(false);
     }
-  }, [filter, agentId, limit]);
+  }, [filter, agentId, marketingStatus, limit]);
 
   // Initial load
   useEffect(() => {

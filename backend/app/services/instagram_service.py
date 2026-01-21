@@ -12,7 +12,7 @@ import httpx
 
 from app.config import Settings, get_settings
 from app.models.channel_binding import ChannelType
-from app.models.conversation import Conversation, ConversationStatus
+from app.models.conversation import Conversation, ConversationStatus, MarketingStatus
 from app.models.instagram_user_profile import InstagramUserProfile
 from app.models.message import Message, MessageChannel, MessageRole
 from app.services.channel_binding_service import ChannelBindingService
@@ -360,6 +360,7 @@ class InstagramService:
             external_user_id=external_user_id,
             external_conversation_id=external_conversation_id,
             status=ConversationStatus.AI_ACTIVE,
+            marketing_status=MarketingStatus.NEW,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )

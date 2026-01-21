@@ -15,7 +15,7 @@ from app.api.schemas import ConversationIDValidator
 from app.api.websocket import connection_manager
 from app.config import get_settings
 from app.dependencies import CommonDependencies
-from app.models.conversation import Conversation, ConversationStatus
+from app.models.conversation import Conversation, ConversationStatus, MarketingStatus
 from app.models.message import Message, MessageChannel, MessageRole
 from app.services.channel_binding_service import ChannelBindingService
 from app.services.channel_sender import get_channel_sender
@@ -49,6 +49,7 @@ class HandoffResponse(BaseModel):
 async def list_conversations(
     agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
     status: Optional[str] = Query(None, description="Filter by conversation status"),
+    marketing_status: Optional[str] = Query(None, description="Filter by marketing status"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of conversations"),
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
@@ -64,9 +65,18 @@ async def list_conversations(
                 detail=f"Invalid status: {status}. Valid values: {', '.join([s.value for s in ConversationStatus])}",
             )
 
+    if marketing_status:
+        valid_marketing_statuses = [s.value for s in MarketingStatus]
+        if marketing_status not in valid_marketing_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid marketing_status: {marketing_status}. Valid values: {', '.join(valid_marketing_statuses)}",
+            )
+
     conversations = await deps.dynamodb.list_conversations(
         agent_id=agent_id,
         status=status_enum,
+        marketing_status=marketing_status,
         limit=limit,
     )
     return conversations
@@ -414,6 +424,25 @@ class RefreshProfileResponse(BaseModel):
     error: Optional[str] = None
 
 
+class UpdateMarketingStatusRequest(BaseModel):
+    """Request to update marketing status."""
+
+    marketing_status: str = Field(..., description="New marketing status")
+    rejection_reason: Optional[str] = Field(
+        None, description="Reason for rejection (required when marketing_status is REJECTED)", max_length=1000
+    )
+    admin_id: str = Field(..., description="Admin user ID", min_length=1)
+
+
+class UpdateMarketingStatusResponse(BaseModel):
+    """Response for marketing status update."""
+
+    conversation_id: str
+    marketing_status: str
+    rejection_reason: Optional[str] = None
+    message: str
+
+
 @router.post(
     "/conversations/{conversation_id}/refresh-profile",
     response_model=RefreshProfileResponse,
@@ -496,6 +525,115 @@ async def refresh_instagram_profile(
         logger.error(f"Error refreshing Instagram profile: {e}", exc_info=True)
         return RefreshProfileResponse(
             error=f"Failed to refresh profile: {str(e)}"
+        )
+
+
+@router.patch(
+    "/conversations/{conversation_id}/marketing-status",
+    response_model=UpdateMarketingStatusResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_marketing_status(
+    conversation_id: str,
+    request: UpdateMarketingStatusRequest,
+    deps: CommonDependencies = Depends(),
+    _admin: str = require_admin(),
+):
+    """Update marketing status of a conversation."""
+    # Validate UUID format
+    try:
+        UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid conversation ID format",
+        )
+
+    # Validate marketing status
+    valid_marketing_statuses = [s.value for s in MarketingStatus]
+    if request.marketing_status not in valid_marketing_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid marketing_status: {request.marketing_status}. Valid values: {', '.join(valid_marketing_statuses)}",
+        )
+
+    # Validate rejection_reason is provided when status is REJECTED
+    if request.marketing_status == MarketingStatus.REJECTED.value:
+        if not request.rejection_reason or not request.rejection_reason.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="rejection_reason is required when marketing_status is REJECTED",
+            )
+
+    # Get current conversation
+    conversation = await deps.dynamodb.get_conversation(conversation_id)
+    if not conversation:
+        raise ConversationNotFoundError(conversation_id)
+
+    # Get old marketing status for audit log
+    old_marketing_status = get_enum_value(conversation.marketing_status) if conversation.marketing_status else MarketingStatus.NEW.value
+
+    try:
+        # Update conversation
+        update_kwargs = {
+            "marketing_status": request.marketing_status,
+        }
+        
+        # Update rejection_reason
+        if request.marketing_status == MarketingStatus.REJECTED.value:
+            update_kwargs["rejection_reason"] = request.rejection_reason
+        else:
+            # Clear rejection_reason when status is not REJECTED
+            update_kwargs["rejection_reason"] = None
+
+        updated = await deps.dynamodb.update_conversation(
+            conversation_id=conversation_id,
+            **update_kwargs,
+        )
+
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update marketing status",
+            )
+
+        # Create audit log entry
+        await deps.dynamodb.create_audit_log(
+            admin_id=request.admin_id,
+            action="update_marketing_status",
+            resource_type="conversation",
+            resource_id=conversation_id,
+            metadata={
+                "old_marketing_status": old_marketing_status,
+                "new_marketing_status": request.marketing_status,
+                "rejection_reason": request.rejection_reason if request.marketing_status == MarketingStatus.REJECTED.value else None,
+            },
+        )
+
+        # Broadcast update to admin dashboard
+        try:
+            from app.api.admin_websocket import get_admin_broadcast_manager
+            broadcast_manager = get_admin_broadcast_manager()
+            await broadcast_manager.broadcast_conversation_update(updated)
+        except Exception as e:
+            logger.warning(
+                f"Failed to broadcast marketing status update: {e}",
+                exc_info=True,
+            )
+
+        return UpdateMarketingStatusResponse(
+            conversation_id=conversation_id,
+            marketing_status=request.marketing_status,
+            rejection_reason=request.rejection_reason if request.marketing_status == MarketingStatus.REJECTED.value else None,
+            message="Marketing status updated successfully",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating marketing status: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update marketing status: {str(e)}",
         )
 
 

@@ -6,6 +6,12 @@ export type ConversationStatus =
   | "HUMAN_ACTIVE"
   | "CLOSED";
 
+export type MarketingStatus =
+  | "NEW"
+  | "BOOKED"
+  | "NO_RESPONSE"
+  | "REJECTED";
+
 export interface Conversation {
   conversation_id: string;
   agent_id: string;
@@ -22,6 +28,8 @@ export interface Conversation {
   external_user_name?: string | null;
   external_user_username?: string | null;
   external_user_profile_pic?: string | null;
+  marketing_status?: MarketingStatus | null;
+  rejection_reason?: string | null;
 }
 
 export interface CreateConversationRequest {

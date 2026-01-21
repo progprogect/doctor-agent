@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from app.config import Settings, get_settings
 from app.models.channel_binding import ChannelBinding
-from app.models.conversation import Conversation, ConversationStatus
+from app.models.conversation import Conversation, ConversationStatus, MarketingStatus
 from app.models.instagram_user_profile import InstagramUserProfile
 from app.models.message import Message, MessageRole
 from app.utils.enum_helpers import get_enum_value
@@ -132,6 +132,10 @@ class DynamoDBClient:
         if "updated_at" in item and isinstance(item["updated_at"], datetime):
             item["updated_at"] = item["updated_at"].isoformat()
         item["ttl"] = self._calculate_ttl(conversation.created_at)
+        
+        # Ensure marketing_status defaults to NEW if not set
+        if "marketing_status" not in item or item["marketing_status"] is None:
+            item["marketing_status"] = MarketingStatus.NEW.value
 
         self.tables["conversations"].put_item(Item=item)
         return conversation
@@ -144,6 +148,9 @@ class DynamoDBClient:
         item = response.get("Item")
         if not item:
             return None
+        # Ensure marketing_status defaults to NEW for existing conversations
+        if "marketing_status" not in item or item["marketing_status"] is None:
+            item["marketing_status"] = MarketingStatus.NEW.value
         return Conversation(**item)
 
     async def update_conversation(
@@ -243,6 +250,7 @@ class DynamoDBClient:
         self,
         agent_id: Optional[str] = None,
         status: Optional[ConversationStatus] = None,
+        marketing_status: Optional[str] = None,
         limit: int = 100,
     ) -> list[Conversation]:
         """List conversations with optional filters."""
@@ -266,6 +274,14 @@ class DynamoDBClient:
                 filter_expression = status_filter
             expression_attribute_values[":status"] = status.value
 
+        if marketing_status:
+            marketing_status_filter = "marketing_status = :marketing_status"
+            if filter_expression:
+                filter_expression += " AND " + marketing_status_filter
+            else:
+                filter_expression = marketing_status_filter
+            expression_attribute_values[":marketing_status"] = marketing_status
+
         scan_kwargs = {"Limit": limit}
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
@@ -277,6 +293,10 @@ class DynamoDBClient:
 
         response = self.tables["conversations"].scan(**scan_kwargs)
         items = response.get("Items", [])
+        # Ensure marketing_status defaults to NEW for existing conversations
+        for item in items:
+            if "marketing_status" not in item or item["marketing_status"] is None:
+                item["marketing_status"] = MarketingStatus.NEW.value
         return [Conversation(**item) for item in items]
 
     # Message operations

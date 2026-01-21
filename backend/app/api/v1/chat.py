@@ -16,7 +16,7 @@ from app.api.schemas import (
 )
 from app.dependencies import CommonDependencies
 from app.models.agent_config import AgentConfig
-from app.models.conversation import Conversation, ConversationStatus
+from app.models.conversation import Conversation, ConversationStatus, MarketingStatus
 from app.models.message import Message, MessageChannel, MessageRole
 from app.services.agent_service import create_agent_service
 from app.services.channel_sender import get_channel_sender
@@ -79,6 +79,7 @@ async def create_conversation(
         agent_id=request.agent_id,
         channel=MessageChannel.WEB_CHAT,  # Web chat is default channel
         status=ConversationStatus.AI_ACTIVE,
+        marketing_status=MarketingStatus.NEW,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )

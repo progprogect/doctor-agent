@@ -262,11 +262,14 @@ export const api = {
   async listConversations(params?: {
     agent_id?: string;
     status?: string;
+    marketing_status?: string;
     limit?: number;
   }): Promise<Conversation[]> {
     const queryParams = new URLSearchParams();
     if (params?.agent_id) queryParams.append("agent_id", params.agent_id);
     if (params?.status) queryParams.append("status", params.status);
+    if (params?.marketing_status)
+      queryParams.append("marketing_status", params.marketing_status);
     if (params?.limit) queryParams.append("limit", params.limit.toString());
 
     return request<Conversation[]>(
@@ -437,6 +440,36 @@ export const api = {
       `/api/v1/channel-bindings/${bindingId}/verify`,
       {
         method: "POST",
+      },
+      true // require auth
+    );
+  },
+
+  async updateMarketingStatus(
+    conversationId: string,
+    marketingStatus: string,
+    adminId: string,
+    rejectionReason?: string
+  ): Promise<{
+    conversation_id: string;
+    marketing_status: string;
+    rejection_reason?: string | null;
+    message: string;
+  }> {
+    return request<{
+      conversation_id: string;
+      marketing_status: string;
+      rejection_reason?: string | null;
+      message: string;
+    }>(
+      `/api/v1/admin/conversations/${conversationId}/marketing-status`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          marketing_status: marketingStatus,
+          rejection_reason: rejectionReason,
+          admin_id: adminId,
+        }),
       },
       true // require auth
     );
