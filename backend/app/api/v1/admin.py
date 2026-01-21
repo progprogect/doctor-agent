@@ -309,7 +309,7 @@ async def send_admin_message(
             logger.error(f"Message verification FAILED: message_id={message_id}, found=False")
         
         # Check messages list immediately after save
-        msgs_after_save = await deps.dynamodb.list_messages(conversation_id, limit=100)
+        msgs_after_save = await deps.dynamodb.list_messages(conversation_id, limit=100, reverse=False)
         contains_new = message_id in [m.message_id for m in msgs_after_save]
         logger.info(f"Messages list after save: conversation_id={conversation_id}, count={len(msgs_after_save)}, contains_new={contains_new}, message_ids={[m.message_id for m in msgs_after_save[:5]]}")
 

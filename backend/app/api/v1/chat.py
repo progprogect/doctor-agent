@@ -324,7 +324,7 @@ async def get_messages(
     except Exception:
         pass
     # #endregion
-    messages = await deps.dynamodb.list_messages(conversation_id, limit=limit)
+    messages = await deps.dynamodb.list_messages(conversation_id, limit=limit, reverse=False)
     # #region agent log
     try:
         import json
