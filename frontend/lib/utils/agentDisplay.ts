@@ -4,19 +4,19 @@ import type { Agent } from "@/lib/types/agent";
 
 /**
  * Get display name for an agent.
- * Priority: clinic_display_name > doctor_display_name > agent_id
+ * Priority: doctor_display_name > clinic_display_name > agent_id
  */
 export function getAgentDisplayName(agent: Agent | null | undefined): string {
   if (!agent) {
     return "Unknown Agent";
   }
 
-  if (agent.config?.profile?.clinic_display_name) {
-    return agent.config.profile.clinic_display_name;
-  }
-
   if (agent.config?.profile?.doctor_display_name) {
     return agent.config.profile.doctor_display_name;
+  }
+
+  if (agent.config?.profile?.clinic_display_name) {
+    return agent.config.profile.clinic_display_name;
   }
 
   return agent.agent_id;
