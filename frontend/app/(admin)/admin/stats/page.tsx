@@ -1,34 +1,30 @@
-/** Statistics page. */
+/** Statistics page with marketing metrics, change indicators, chart, and period filter. */
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-
-interface Stats {
-  total_conversations: number;
-  ai_active: number;
-  needs_human: number;
-  human_active: number;
-  closed: number;
-}
+import { StatCardGroup } from "@/components/admin/StatCardGroup";
+import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
+import { PeriodComparison } from "@/components/admin/PeriodComparison";
+import { Select } from "@/components/shared/Select";
+import type { Stats, Period } from "@/lib/types/stats";
 
 export default function StatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>("today");
+  const [includeComparison, setIncludeComparison] = useState(false);
 
-  useEffect(() => {
-    loadStats();
-    // Refresh every 10 seconds
-    const interval = setInterval(loadStats, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
-      const statsData = await api.getStats();
+      setIsLoading(true);
+      const statsData = await api.getStats({
+        period,
+        include_comparison: includeComparison,
+      });
       setStats(statsData);
       setError(null);
     } catch (err) {
@@ -40,7 +36,14 @@ export default function StatsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [period, includeComparison]);
+
+  useEffect(() => {
+    loadStats();
+    // Refresh every 10 seconds
+    const interval = setInterval(loadStats, 10000);
+    return () => clearInterval(interval);
+  }, [loadStats]);
 
   if (isLoading) {
     return (
@@ -58,40 +61,162 @@ export default function StatsPage() {
     );
   }
 
-  const statCards = [
-    { label: "Total Conversations", value: stats.total_conversations, color: "gold" },
-    { label: "AI Active", value: stats.ai_active, color: "gold-light" },
-    { label: "Needs Human", value: stats.needs_human, color: "amber" },
-    { label: "Human Active", value: stats.human_active, color: "blue" },
-    { label: "Closed", value: stats.closed, color: "gray" },
-  ];
-
-  const colorClasses = {
-    gold: "bg-[#F5D76E]/10 text-[#B8860B] border-[#D4AF37]/30",
-    "gold-light": "bg-[#F5D76E]/20 text-[#B8860B] border-[#D4AF37]/40",
-    amber: "bg-[#F59E0B]/10 text-[#D97706] border-[#F59E0B]/30",
-    blue: "bg-[#3B82F6]/10 text-[#2563EB] border-[#3B82F6]/30",
-    gray: "bg-gray-50 text-gray-700 border-gray-200",
-  };
+  // Generate chart data (mock data for last 7 days)
+  // In a real implementation, this would come from the API
+  const chartData = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - i));
+    return {
+      date: date.toISOString(),
+      value: Math.floor(Math.random() * 50) + 10, // Mock data
+    };
+  });
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Statistics</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {statCards.map((card) => (
-          <div
-            key={card.label}
-            className={`p-6 rounded-sm border border-[#D4AF37]/20 bg-white shadow-sm hover:shadow-md transition-all duration-200 ${colorClasses[card.color as keyof typeof colorClasses]}`}
-          >
-            <p className="text-sm font-medium mb-2">{card.label}</p>
-            <p className="text-3xl font-bold">{card.value}</p>
-          </div>
-        ))}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Statistics</h1>
+        <div className="w-48">
+          <Select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as Period)}
+            options={[
+              { value: "today", label: "Today" },
+              { value: "last_7_days", label: "Last 7 days" },
+              { value: "last_30_days", label: "Last 30 days" },
+            ]}
+          />
+        </div>
       </div>
+
+      {includeComparison && stats.comparison && (
+        <PeriodComparison
+          comparison={stats.comparison}
+          currentStats={{
+            total_conversations: stats.total_conversations,
+            ai_active: stats.ai_active,
+            needs_human: stats.needs_human,
+            human_active: stats.human_active,
+            closed: stats.closed,
+            marketing_new: stats.marketing_new,
+            marketing_booked: stats.marketing_booked,
+            marketing_no_response: stats.marketing_no_response,
+            marketing_rejected: stats.marketing_rejected,
+          }}
+          enabled={includeComparison}
+          onToggle={setIncludeComparison}
+        />
+      )}
+
+      {!includeComparison && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="comparison-toggle"
+              checked={includeComparison}
+              onChange={(e) => setIncludeComparison(e.target.checked)}
+              className="h-4 w-4 text-[#D4AF37] focus:ring-[#D4AF37] border-gray-300 rounded"
+            />
+            <label htmlFor="comparison-toggle" className="text-sm font-medium text-gray-700">
+              Show comparison with previous period
+            </label>
+          </div>
+        </div>
+      )}
+
+      <StatCardGroup
+        title="Overview"
+        cards={[
+          {
+            label: "Total Conversations",
+            value: stats.total_conversations,
+            change: stats.comparison?.total_conversations,
+            icon: "💬",
+            colorClass: "bg-[#F5D76E]/10 text-[#B8860B] border-[#D4AF37]/30",
+          },
+        ]}
+        columns={1}
+      />
+
+      <StatCardGroup
+        title="Technical Statuses"
+        cards={[
+          {
+            label: "AI Active",
+            value: stats.ai_active,
+            change: stats.comparison?.ai_active,
+            icon: "🤖",
+            colorClass: "bg-[#F5D76E]/20 text-[#B8860B] border-[#D4AF37]/40",
+          },
+          {
+            label: "Needs Human",
+            value: stats.needs_human,
+            change: stats.comparison?.needs_human,
+            icon: "👤",
+            colorClass: "bg-[#F59E0B]/10 text-[#D97706] border-[#F59E0B]/30",
+          },
+          {
+            label: "Human Active",
+            value: stats.human_active,
+            change: stats.comparison?.human_active,
+            icon: "✋",
+            colorClass: "bg-[#3B82F6]/10 text-[#2563EB] border-[#3B82F6]/30",
+          },
+          {
+            label: "Closed",
+            value: stats.closed,
+            change: stats.comparison?.closed,
+            icon: "✅",
+            colorClass: "bg-gray-50 text-gray-700 border-gray-200",
+          },
+        ]}
+        columns={4}
+      />
+
+      <StatCardGroup
+        title="Marketing Statuses"
+        cards={[
+          {
+            label: "New",
+            value: stats.marketing_new,
+            change: stats.comparison?.marketing_new,
+            icon: "✨",
+            colorClass: "bg-blue-100 text-blue-800 border border-blue-200",
+          },
+          {
+            label: "Booked",
+            value: stats.marketing_booked,
+            change: stats.comparison?.marketing_booked,
+            icon: "✅",
+            colorClass: "bg-green-100 text-green-800 border border-green-200",
+          },
+          {
+            label: "No Response",
+            value: stats.marketing_no_response,
+            change: stats.comparison?.marketing_no_response,
+            icon: "⏳",
+            colorClass: "bg-gray-100 text-gray-800 border border-gray-200",
+          },
+          {
+            label: "Rejected",
+            value: stats.marketing_rejected,
+            change: stats.comparison?.marketing_rejected,
+            icon: "❌",
+            colorClass: "bg-red-100 text-red-800 border border-red-200",
+          },
+        ]}
+        columns={4}
+      />
+
+      {period === "last_7_days" && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Conversations Over Time (Last 7 Days)
+          </h2>
+          <SimpleLineChart data={chartData} />
+        </div>
+      )}
     </div>
   );
 }
-
-
-

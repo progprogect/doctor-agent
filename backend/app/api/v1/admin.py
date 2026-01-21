@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
@@ -239,14 +239,49 @@ async def return_to_ai(
 async def get_audit_logs(
     admin_id: Optional[str] = Query(None, description="Filter by admin ID"),
     resource_type: Optional[str] = Query(None, description="Filter by resource type"),
+    action: Optional[str] = Query(None, description="Filter by action"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    sort: str = Query(default="desc", description="Sort order: 'asc' or 'desc'"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of logs"),
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
 ):
-    """Get audit logs."""
+    """Get audit logs with filtering and sorting."""
+    # Validate sort parameter
+    if sort not in ["asc", "desc"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid sort parameter. Must be 'asc' or 'desc'",
+        )
+    
+    # Parse dates if provided
+    start_datetime = None
+    end_datetime = None
+    if start_date:
+        try:
+            start_datetime = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid start_date format. Use ISO format (e.g., 2024-01-01T00:00:00Z)",
+            )
+    if end_date:
+        try:
+            end_datetime = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid end_date format. Use ISO format (e.g., 2024-01-01T00:00:00Z)",
+            )
+    
     logs = await deps.dynamodb.list_audit_logs(
         admin_id=admin_id,
         resource_type=resource_type,
+        action=action,
+        start_date=start_datetime,
+        end_date=end_datetime,
+        sort_desc=sort == "desc",
         limit=limit,
     )
     return logs
@@ -639,20 +674,189 @@ async def update_marketing_status(
 
 @router.get("/stats")
 async def get_stats(
+    period: Optional[str] = Query(
+        default="today",
+        description="Time period: 'today', 'last_7_days', 'last_30_days'",
+    ),
+    include_comparison: bool = Query(
+        default=False,
+        description="Include comparison with previous period",
+    ),
     deps: CommonDependencies = Depends(),
     _admin: str = require_admin(),
 ):
-    """Get basic statistics."""
-    # Get all conversations
-    all_conversations = await deps.dynamodb.list_conversations(limit=1000)
+    """Get statistics with optional period filtering and comparison."""
+    # Validate period parameter
+    valid_periods = ["today", "last_7_days", "last_30_days"]
+    if period not in valid_periods:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid period. Must be one of: {', '.join(valid_periods)}",
+        )
 
+    # Calculate date range based on period
+    now = datetime.utcnow()
+    if period == "today":
+        start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
+        end_date = now
+    elif period == "last_7_days":
+        start_date = now - timedelta(days=7)
+        end_date = now
+    else:  # last_30_days
+        start_date = now - timedelta(days=30)
+        end_date = now
+
+    # Get conversations for the period
+    all_conversations = await deps.dynamodb.list_conversations(limit=1000)
+    
+    # Filter conversations by date range (handle both datetime and string formats)
+    period_conversations = []
+    for c in all_conversations:
+        if not c.created_at:
+            continue
+        created_dt = None
+        if isinstance(c.created_at, datetime):
+            created_dt = c.created_at
+        elif isinstance(c.created_at, str):
+            try:
+                created_dt = datetime.fromisoformat(c.created_at.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                continue
+        if created_dt and start_date <= created_dt <= end_date:
+            period_conversations.append(c)
+
+    # Calculate technical status metrics
     stats = {
-        "total_conversations": len(all_conversations),
-        "ai_active": sum(1 for c in all_conversations if c.status == ConversationStatus.AI_ACTIVE),
-        "needs_human": sum(1 for c in all_conversations if c.status == ConversationStatus.NEEDS_HUMAN),
-        "human_active": sum(1 for c in all_conversations if c.status == ConversationStatus.HUMAN_ACTIVE),
-        "closed": sum(1 for c in all_conversations if c.status == ConversationStatus.CLOSED),
+        "total_conversations": len(period_conversations),
+        "ai_active": sum(
+            1
+            for c in period_conversations
+            if get_enum_value(c.status) == ConversationStatus.AI_ACTIVE.value
+        ),
+        "needs_human": sum(
+            1
+            for c in period_conversations
+            if get_enum_value(c.status) == ConversationStatus.NEEDS_HUMAN.value
+        ),
+        "human_active": sum(
+            1
+            for c in period_conversations
+            if get_enum_value(c.status) == ConversationStatus.HUMAN_ACTIVE.value
+        ),
+        "closed": sum(
+            1
+            for c in period_conversations
+            if get_enum_value(c.status) == ConversationStatus.CLOSED.value
+        ),
+        # Marketing status metrics
+        "marketing_new": sum(
+            1
+            for c in period_conversations
+            if get_enum_value(c.marketing_status) == MarketingStatus.NEW.value
+        ),
+        "marketing_booked": sum(
+            1
+            for c in period_conversations
+            if get_enum_value(c.marketing_status) == MarketingStatus.BOOKED.value
+        ),
+        "marketing_no_response": sum(
+            1
+            for c in period_conversations
+            if get_enum_value(c.marketing_status) == MarketingStatus.NO_RESPONSE.value
+        ),
+        "marketing_rejected": sum(
+            1
+            for c in period_conversations
+            if get_enum_value(c.marketing_status) == MarketingStatus.REJECTED.value
+        ),
+        "period": period,
     }
+
+    # Calculate comparison if requested
+    if include_comparison:
+        # Calculate previous period
+        if period == "today":
+            prev_start = start_date - timedelta(days=1)
+            prev_end = start_date
+        elif period == "last_7_days":
+            prev_start = start_date - timedelta(days=7)
+            prev_end = start_date
+        else:  # last_30_days
+            prev_start = start_date - timedelta(days=30)
+            prev_end = start_date
+
+        # Get previous period conversations (handle both datetime and string formats)
+        prev_conversations = []
+        for c in all_conversations:
+            if not c.created_at:
+                continue
+            created_dt = None
+            if isinstance(c.created_at, datetime):
+                created_dt = c.created_at
+            elif isinstance(c.created_at, str):
+                try:
+                    created_dt = datetime.fromisoformat(c.created_at.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    continue
+            if created_dt and prev_start <= created_dt < prev_end:
+                prev_conversations.append(c)
+
+        prev_stats = {
+            "total_conversations": len(prev_conversations),
+            "ai_active": sum(
+                1
+                for c in prev_conversations
+                if get_enum_value(c.status) == ConversationStatus.AI_ACTIVE.value
+            ),
+            "needs_human": sum(
+                1
+                for c in prev_conversations
+                if get_enum_value(c.status) == ConversationStatus.NEEDS_HUMAN.value
+            ),
+            "human_active": sum(
+                1
+                for c in prev_conversations
+                if get_enum_value(c.status) == ConversationStatus.HUMAN_ACTIVE.value
+            ),
+            "closed": sum(
+                1
+                for c in prev_conversations
+                if get_enum_value(c.status) == ConversationStatus.CLOSED.value
+            ),
+            "marketing_new": sum(
+                1
+                for c in prev_conversations
+                if get_enum_value(c.marketing_status) == MarketingStatus.NEW.value
+            ),
+            "marketing_booked": sum(
+                1
+                for c in prev_conversations
+                if get_enum_value(c.marketing_status) == MarketingStatus.BOOKED.value
+            ),
+            "marketing_no_response": sum(
+                1
+                for c in prev_conversations
+                if get_enum_value(c.marketing_status) == MarketingStatus.NO_RESPONSE.value
+            ),
+            "marketing_rejected": sum(
+                1
+                for c in prev_conversations
+                if get_enum_value(c.marketing_status) == MarketingStatus.REJECTED.value
+            ),
+        }
+
+        # Calculate changes
+        stats["comparison"] = {
+            "total_conversations": stats["total_conversations"] - prev_stats["total_conversations"],
+            "ai_active": stats["ai_active"] - prev_stats["ai_active"],
+            "needs_human": stats["needs_human"] - prev_stats["needs_human"],
+            "human_active": stats["human_active"] - prev_stats["human_active"],
+            "closed": stats["closed"] - prev_stats["closed"],
+            "marketing_new": stats["marketing_new"] - prev_stats["marketing_new"],
+            "marketing_booked": stats["marketing_booked"] - prev_stats["marketing_booked"],
+            "marketing_no_response": stats["marketing_no_response"] - prev_stats["marketing_no_response"],
+            "marketing_rejected": stats["marketing_rejected"] - prev_stats["marketing_rejected"],
+        }
 
     return stats
 

@@ -338,12 +338,20 @@ export const api = {
   async getAuditLogs(params?: {
     admin_id?: string;
     resource_type?: string;
+    action?: string;
+    start_date?: string;
+    end_date?: string;
+    sort?: string;
     limit?: number;
   }): Promise<any[]> {
     const queryParams = new URLSearchParams();
     if (params?.admin_id) queryParams.append("admin_id", params.admin_id);
     if (params?.resource_type)
       queryParams.append("resource_type", params.resource_type);
+    if (params?.action) queryParams.append("action", params.action);
+    if (params?.start_date) queryParams.append("start_date", params.start_date);
+    if (params?.end_date) queryParams.append("end_date", params.end_date);
+    if (params?.sort) queryParams.append("sort", params.sort);
     if (params?.limit)
       queryParams.append("limit", params.limit.toString());
 
@@ -354,14 +362,42 @@ export const api = {
     );
   },
 
-  async getStats(): Promise<{
+  async getStats(params?: {
+    period?: string;
+    include_comparison?: boolean;
+  }): Promise<{
     total_conversations: number;
     ai_active: number;
     needs_human: number;
     human_active: number;
     closed: number;
+    marketing_new: number;
+    marketing_booked: number;
+    marketing_no_response: number;
+    marketing_rejected: number;
+    period: string;
+    comparison?: {
+      total_conversations: number;
+      ai_active: number;
+      needs_human: number;
+      human_active: number;
+      closed: number;
+      marketing_new: number;
+      marketing_booked: number;
+      marketing_no_response: number;
+      marketing_rejected: number;
+    };
   }> {
-    return request("/api/v1/admin/stats", {}, true); // require auth
+    const queryParams = new URLSearchParams();
+    if (params?.period) queryParams.append("period", params.period);
+    if (params?.include_comparison !== undefined)
+      queryParams.append("include_comparison", params.include_comparison.toString());
+
+    return request(
+      `/api/v1/admin/stats?${queryParams.toString()}`,
+      {},
+      true
+    ); // require auth
   },
 
   // Channel bindings endpoints

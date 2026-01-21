@@ -751,9 +751,13 @@ class DynamoDBClient:
         self,
         admin_id: Optional[str] = None,
         resource_type: Optional[str] = None,
+        action: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        sort_desc: bool = True,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        """List audit logs."""
+        """List audit logs with filtering and sorting."""
         filter_expression = None
         expression_attribute_values = {}
 
@@ -769,14 +773,52 @@ class DynamoDBClient:
                 filter_expression = resource_filter
             expression_attribute_values[":resource_type"] = resource_type
 
+        if action:
+            action_filter = "action = :action"
+            if filter_expression:
+                filter_expression += " AND " + action_filter
+            else:
+                filter_expression = action_filter
+            expression_attribute_values[":action"] = action
+
+        if start_date:
+            start_filter = "timestamp >= :start_date"
+            if filter_expression:
+                filter_expression += " AND " + start_filter
+            else:
+                filter_expression = start_filter
+            expression_attribute_values[":start_date"] = start_date.isoformat()
+
+        if end_date:
+            end_filter = "timestamp <= :end_date"
+            if filter_expression:
+                filter_expression += " AND " + end_filter
+            else:
+                filter_expression = end_filter
+            expression_attribute_values[":end_date"] = end_date.isoformat()
+
         scan_kwargs = {"Limit": limit}
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
-            # Don't pass ExpressionAttributeNames if it's empty - DynamoDB doesn't accept empty dict
 
         response = self.tables["audit_logs"].scan(**scan_kwargs)
-        return response.get("Items", [])
+        items = response.get("Items", [])
+        
+        # Sort by timestamp
+        def get_timestamp(item: dict[str, Any]) -> datetime:
+            """Extract timestamp from audit log item."""
+            ts_str = item.get("timestamp", "")
+            if isinstance(ts_str, str):
+                try:
+                    return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    return datetime.min
+            return datetime.min
+        
+        items.sort(key=get_timestamp, reverse=sort_desc)
+        
+        return items
 
     # Instagram profile operations
     async def create_or_update_instagram_profile(
