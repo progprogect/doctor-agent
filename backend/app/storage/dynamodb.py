@@ -312,6 +312,17 @@ class DynamoDBClient:
             ScanIndexForward=not reverse,  # False = descending (newest first), True = ascending
         )
         items = response.get("Items", [])
+        
+        # Парсим timestamp из строки перед созданием Message объектов
+        # Pydantic может не парсить ISO строки автоматически из DynamoDB
+        for item in items:
+            if "timestamp" in item and isinstance(item["timestamp"], str):
+                try:
+                    # Парсим ISO строку в datetime
+                    ts_str = item["timestamp"].replace('Z', '+00:00')
+                    item["timestamp"] = datetime.fromisoformat(ts_str)
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Failed to parse timestamp '{item.get('timestamp')}': {e}, keeping as string")
 
         result = [Message(**item) for item in items]
         
