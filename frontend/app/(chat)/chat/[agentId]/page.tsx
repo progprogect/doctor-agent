@@ -1,4 +1,4 @@
-/** Chat page for specific agent. */
+/** Chat page for specific agent with improved header and agent info. */
 
 "use client";
 
@@ -6,7 +6,10 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Button } from "@/components/shared/Button";
 import { api, ApiError } from "@/lib/api";
+import { getAgentDisplayName, getAgentInitials, getAgentSpecialty } from "@/lib/utils/agentDisplay";
+import { toConversationStatus } from "@/lib/utils/statusHelpers";
 import type { Agent } from "@/lib/types/agent";
 import type { Conversation } from "@/lib/types/conversation";
 
@@ -47,7 +50,7 @@ export default function ChatPage() {
             setConversation({
               conversation_id: newConversation.conversation_id,
               agent_id: newConversation.agent_id,
-              status: newConversation.status as any,
+              status: toConversationStatus(newConversation.status),
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             });
@@ -60,7 +63,7 @@ export default function ChatPage() {
           setConversation({
             conversation_id: newConversation.conversation_id,
             agent_id: newConversation.agent_id,
-            status: newConversation.status as any,
+            status: toConversationStatus(newConversation.status),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
@@ -92,15 +95,12 @@ export default function ChatPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4 bg-white">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => router.push("/")}
-            className="px-4 py-2 bg-[#D4AF37] text-white rounded-sm hover:bg-[#B8860B] transition-all duration-200 shadow-sm hover:shadow-md"
-          >
-            Go back
-          </button>
+          <Button variant="primary" onClick={() => router.push("/")}>
+            Go Back
+          </Button>
         </div>
       </div>
     );
@@ -109,25 +109,42 @@ export default function ChatPage() {
   if (!conversation) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p>Failed to create conversation</p>
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Failed to create conversation</p>
+          <Button variant="primary" onClick={() => router.push("/")}>
+            Go Back
+          </Button>
+        </div>
       </div>
     );
   }
 
+  const agentDisplayName = agent ? getAgentDisplayName(agent) : "AI Assistant";
+  const agentInitials = agent ? getAgentInitials(agent) : "AI";
+  const specialty = agent ? getAgentSpecialty(agent) : null;
+
   return (
     <div className="h-screen flex flex-col bg-white">
-      <div className="border-b border-[#D4AF37]/20 px-6 py-4 bg-white">
-        <h1 className="text-xl font-semibold text-gray-900">
-          <span className="text-[#D4AF37]">
-            {agent?.config.profile.clinic_display_name || "Chat"}
-          </span>
-        </h1>
-        <p className="text-sm text-gray-600">
-          {agent?.config.profile.doctor_display_name || ""}
-        </p>
+      <div className="border-b border-[#D4AF37]/20 px-6 py-4 bg-white shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#F5D76E]/20 flex items-center justify-center text-lg font-medium text-[#B8860B]">
+            {agentInitials}
+          </div>
+          <div className="flex-1">
+            <h1 className="text-xl font-semibold text-gray-900">
+              {agentDisplayName}
+            </h1>
+            {specialty && (
+              <p className="text-sm text-gray-600">{specialty}</p>
+            )}
+          </div>
+        </div>
       </div>
       <div className="flex-1 overflow-hidden">
-        <ChatWindow conversationId={conversation.conversation_id} />
+        <ChatWindow
+          conversationId={conversation.conversation_id}
+          agentName={agentDisplayName}
+        />
       </div>
     </div>
   );

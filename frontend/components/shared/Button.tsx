@@ -1,4 +1,4 @@
-/** Reusable button component. */
+/** Reusable button component with icon support. */
 
 import React from "react";
 
@@ -6,6 +6,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger" | "ghost";
   size?: "sm" | "md" | "lg";
   isLoading?: boolean;
+  icon?: React.ReactNode;
+  iconPosition?: "left" | "right";
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -15,6 +17,8 @@ export const Button: React.FC<ButtonProps> = ({
   isLoading = false,
   disabled,
   className = "",
+  icon,
+  iconPosition = "left",
   ...props
 }) => {
   const baseStyles =
@@ -32,24 +36,27 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const sizeStyles = {
-    sm: "px-3 py-1.5 text-sm",
-    md: "px-4 py-2 text-base",
-    lg: "px-6 py-3 text-lg",
+    sm: "px-3 py-1.5 text-sm gap-1.5",
+    md: "px-4 py-2 text-base gap-2",
+    lg: "px-6 py-3 text-lg gap-2.5",
   };
 
-  return (
-    <button
-      className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
-      disabled={disabled || isLoading}
-      {...props}
-    >
-      {isLoading ? (
+  const iconSizeClasses = {
+    sm: "h-3.5 w-3.5",
+    md: "h-4 w-4",
+    lg: "h-5 w-5",
+  };
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
         <>
           <svg
-            className="animate-spin -ml-1 mr-2 h-4 w-4"
+            className={`animate-spin ${iconSizeClasses[size]}`}
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
+            aria-hidden="true"
           >
             <circle
               className="opacity-25"
@@ -65,11 +72,46 @@ export const Button: React.FC<ButtonProps> = ({
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12c0-1.357.538-2.586 1.414-3.462L6 8.586A7.962 7.962 0 0112 4c1.357 0 2.586.538 3.462 1.414L17.414 6A7.962 7.962 0 0120 12c0 1.357-.538 2.586-1.414 3.462L17.414 17A7.962 7.962 0 0112 20c-1.357 0-2.586-.538-3.462-1.414L6 17.414z"
             />
           </svg>
-          Loading...
+          <span>Loading...</span>
         </>
-      ) : (
-        children
-      )}
+      );
+    }
+
+    if (!icon) {
+      return children;
+    }
+
+    const iconElement = (
+      <span className={`flex-shrink-0 ${iconSizeClasses[size]}`} aria-hidden="true">
+        {icon}
+      </span>
+    );
+
+    if (iconPosition === "right") {
+      return (
+        <>
+          {children}
+          {iconElement}
+        </>
+      );
+    }
+
+    return (
+      <>
+        {iconElement}
+        {children}
+      </>
+    );
+  };
+
+  return (
+    <button
+      className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      disabled={disabled || isLoading}
+      aria-busy={isLoading}
+      {...props}
+    >
+      {renderContent()}
     </button>
   );
 };

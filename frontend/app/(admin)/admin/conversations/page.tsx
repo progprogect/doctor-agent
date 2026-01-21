@@ -1,24 +1,59 @@
-/** Conversations monitoring page with real-time updates. */
+/** Conversations monitoring page with real-time updates and improved UX. */
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useConversationsList, type ConversationFilter } from "@/lib/hooks/useConversationsList";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
 import { Select } from "@/components/shared/Select";
+import { Input } from "@/components/shared/Input";
 import { ConfirmModal } from "@/components/shared/ConfirmModal";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { Tooltip } from "@/components/shared/Tooltip";
 import { api } from "@/lib/api";
 import Link from "next/link";
 import type { Conversation } from "@/lib/types/conversation";
+import type { Agent } from "@/lib/types/agent";
 import { getChannelDisplay } from "@/lib/utils/channelDisplay";
+import { getConversationDisplayId } from "@/lib/utils/conversationDisplay";
+import { getAgentDisplayName } from "@/lib/utils/agentDisplay";
+import { getWaitingTime, formatDate } from "@/lib/utils/timeFormat";
+import { toConversationStatus } from "@/lib/utils/statusHelpers";
+import type { ConversationStatus } from "@/lib/types/conversation";
+
+const ViewIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={2}
+    stroke="currentColor"
+    className="h-4 w-4"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+    />
+  </svg>
+);
 
 export default function ConversationsPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<ConversationFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [takeOverConversationId, setTakeOverConversationId] = useState<string | null>(null);
   const [isTakingOver, setIsTakingOver] = useState(false);
+  const [agents, setAgents] = useState<Map<string, Agent>>(new Map());
+  const [isLoadingAgents, setIsLoadingAgents] = useState(true);
 
   const {
     conversations,
@@ -33,41 +68,50 @@ export default function ConversationsPage() {
     enablePolling: true,
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "AI_ACTIVE":
-        return "bg-[#F5D76E]/20 text-[#B8860B] border border-[#D4AF37]/30";
-      case "NEEDS_HUMAN":
-        return "bg-[#F59E0B]/20 text-[#D97706] border border-[#F59E0B]/30";
-      case "HUMAN_ACTIVE":
-        return "bg-[#3B82F6]/20 text-[#2563EB] border border-[#3B82F6]/30";
-      case "CLOSED":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+  // Load agents for display names
+  useEffect(() => {
+    const loadAgents = async () => {
+      try {
+        setIsLoadingAgents(true);
+        const agentsList = await api.listAgents(false);
+        const agentsMap = new Map<string, Agent>();
+        agentsList.forEach((agent) => {
+          agentsMap.set(agent.agent_id, agent);
+        });
+        setAgents(agentsMap);
+      } catch (err) {
+        console.error("Failed to load agents:", err);
+      } finally {
+        setIsLoadingAgents(false);
+      }
+    };
+    loadAgents();
+  }, []);
 
-  const getWaitingTime = (updatedAt: string): string => {
-    const now = new Date();
-    const updated = new Date(updatedAt);
-    const diffMs = now.getTime() - updated.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m`;
-    const diffHours = Math.floor(diffMins / 60);
-    return `${diffHours}h`;
-  };
+  // Filter and search conversations
+  const filteredConversations = useMemo(() => {
+    let filtered = [...conversations];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((conv) => {
+        const agent = agents.get(conv.agent_id);
+        const agentName = agent ? getAgentDisplayName(agent).toLowerCase() : "";
+        const convId = conv.conversation_id.toLowerCase();
+        return agentName.includes(query) || convId.includes(query);
+      });
+    }
+
+    return filtered;
+  }, [conversations, searchQuery, agents]);
 
   const handleTakeOver = async (conversationId: string) => {
     try {
       setIsTakingOver(true);
       await api.handoffConversation(conversationId, "admin_user", "Quick takeover");
       setTakeOverConversationId(null);
-      // Refresh to get updated status
       await refresh();
-      // Optionally redirect to conversation detail page
       router.push(`/admin/conversations/${conversationId}`);
     } catch (err) {
       console.error("Failed to take over conversation:", err);
@@ -77,7 +121,7 @@ export default function ConversationsPage() {
     }
   };
 
-  const isNeedsHuman = (status: string) => status === "NEEDS_HUMAN";
+  const isNeedsHuman = (status: ConversationStatus) => status === "NEEDS_HUMAN";
 
   if (isLoading && conversations.length === 0) {
     return (
@@ -98,6 +142,9 @@ export default function ConversationsPage() {
                 {needsHumanCount} conversation{needsHumanCount !== 1 ? "s" : ""} require{needsHumanCount === 1 ? "s" : ""} attention
               </span>
             )}
+            {!needsHumanCount && filteredConversations.length > 0 && (
+              <span>{filteredConversations.length} conversation{filteredConversations.length !== 1 ? "s" : ""}</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -107,12 +154,13 @@ export default function ConversationsPage() {
               className={`w-2 h-2 rounded-full ${
                 isConnected ? "bg-green-500" : "bg-gray-400"
               }`}
+              aria-label={isConnected ? "Live connection" : "Polling mode"}
             />
             <span className="text-sm text-gray-600">
               {isConnected ? "Live" : "Polling"}
             </span>
           </div>
-          
+
           {/* Filter dropdown */}
           <div className="w-48">
             <Select
@@ -129,26 +177,43 @@ export default function ConversationsPage() {
         </div>
       </div>
 
+      {/* Search bar */}
+      <div className="mb-4">
+        <Input
+          type="text"
+          placeholder="Search by agent name or conversation ID..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="max-w-md"
+        />
+      </div>
+
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-sm">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-sm" role="alert">
           <p className="text-sm text-red-700">{error}</p>
         </div>
       )}
 
-      {conversations.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-600">No conversations found</p>
-        </div>
+      {filteredConversations.length === 0 ? (
+        <EmptyState
+          icon="💬"
+          title={searchQuery ? "No conversations found" : "No conversations yet"}
+          description={
+            searchQuery
+              ? "Try adjusting your search query or filters."
+              : "Conversations will appear here once users start chatting."
+          }
+        />
       ) : (
         <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-[#F5D76E]/10">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
-                  Conversation ID
+                  Conversation
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
-                  Agent ID
+                  Agent
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Channel
@@ -159,19 +224,22 @@ export default function ConversationsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Created
                 </th>
-                {filter === "all" || filter === "needs_attention" ? (
+                {(filter === "all" || filter === "needs_attention") && (
                   <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                     Waiting
                   </th>
-                ) : null}
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#B8860B] uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {conversations.map((conv) => {
+              {filteredConversations.map((conv) => {
                 const needsAttention = isNeedsHuman(conv.status);
+                const agent = agents.get(conv.agent_id);
+                const agentDisplayName = agent ? getAgentDisplayName(agent) : conv.agent_id;
+
                 return (
                   <tr
                     key={conv.conversation_id}
@@ -181,52 +249,57 @@ export default function ConversationsPage() {
                         : "hover:bg-[#F5D76E]/5"
                     }`}
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         {needsAttention && (
-                          <span className="text-lg" title="Requires attention">
+                          <span className="text-lg" aria-label="Requires attention">
                             ⚠️
                           </span>
                         )}
-                        <span
-                          className={`text-sm ${
-                            needsAttention ? "font-bold text-gray-900" : "font-medium text-gray-900"
-                          }`}
-                        >
-                          {conv.conversation_id.substring(0, 8)}...
-                        </span>
+                        <div className="flex flex-col">
+                          <span
+                            className={`text-sm ${
+                              needsAttention ? "font-bold text-gray-900" : "font-medium text-gray-900"
+                            }`}
+                          >
+                            {getConversationDisplayId(conv, "list")}
+                          </span>
+                          <span className="text-xs text-gray-500 font-mono">
+                            {conv.conversation_id.substring(0, 8)}...
+                          </span>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {conv.agent_id}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {isLoadingAgents ? (
+                        <span className="text-sm text-gray-400">Loading...</span>
+                      ) : (
+                        <span className="text-sm text-gray-700" title={conv.agent_id}>
+                          {agentDisplayName}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {getChannelDisplay(conv.channel)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-sm ${getStatusColor(
-                          conv.status
-                        )}`}
-                      >
-                        {conv.status}
-                      </span>
+                      <StatusBadge status={toConversationStatus(conv.status)} size="sm" />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(conv.created_at).toLocaleDateString()}
+                      {formatDate(conv.created_at)}
                     </td>
                     {(filter === "all" || filter === "needs_attention") && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {needsAttention ? (
                           <span className="text-[#F59E0B] font-medium">
                             {getWaitingTime(conv.updated_at)}
                           </span>
                         ) : (
-                          "-"
+                          <span className="text-gray-400">-</span>
                         )}
                       </td>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         {needsAttention && (
                           <Button
@@ -238,12 +311,15 @@ export default function ConversationsPage() {
                             Take Over
                           </Button>
                         )}
-                        <Link
-                          href={`/admin/conversations/${conv.conversation_id}`}
-                          className="text-[#D4AF37] hover:text-[#B8860B] transition-colors duration-200"
-                        >
-                          View
-                        </Link>
+                        <Tooltip content={`View conversation ${conv.conversation_id}`}>
+                          <Link
+                            href={`/admin/conversations/${conv.conversation_id}`}
+                            className="inline-flex items-center justify-center w-8 h-8 text-[#D4AF37] hover:text-[#B8860B] hover:bg-[#F5D76E]/10 rounded-sm transition-all duration-200"
+                            aria-label="View conversation"
+                          >
+                            <ViewIcon />
+                          </Link>
+                        </Tooltip>
                       </div>
                     </td>
                   </tr>

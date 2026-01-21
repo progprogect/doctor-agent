@@ -1,56 +1,104 @@
-/** Message bubble component. */
+/** Message bubble component with avatars and improved styling. */
 
-import React from "react";
+import React, { memo } from "react";
 import type { Message } from "@/lib/types/message";
+import { formatMessageTime } from "@/lib/utils/timeFormat";
 
 interface MessageBubbleProps {
   message: Message;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+const getAvatar = (role: Message["role"]) => {
+  switch (role) {
+    case "user":
+      return "👤";
+    case "admin":
+      return "👨‍💼";
+    case "agent":
+      return "🤖";
+    default:
+      return "💬";
+  }
+};
+
+const getRoleLabel = (role: Message["role"]) => {
+  switch (role) {
+    case "user":
+      return "You";
+    case "admin":
+      return "Admin";
+    case "agent":
+      return "AI Assistant";
+    default:
+      return "Unknown";
+  }
+};
+
+export const MessageBubble: React.FC<MessageBubbleProps> = memo(({ message }) => {
   const isUser = message.role === "user";
   const isAdmin = message.role === "admin";
-
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString("ru-RU", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const isAgent = message.role === "agent";
 
   return (
     <div
-      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}
+      className={`flex items-start gap-2 mb-4 ${isUser ? "flex-row-reverse" : "flex-row"}`}
     >
+      {/* Avatar */}
       <div
-        className={`max-w-[70%] rounded-sm px-4 py-2 transition-all duration-200 ${
+        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-lg ${
           isUser
-            ? "bg-[#D4AF37] text-white shadow-sm"
+            ? "bg-[#D4AF37]/20"
             : isAdmin
-            ? "bg-[#B8860B] text-white shadow-sm border border-[#D4AF37]"
-            : "bg-white text-gray-900 border border-[#D4AF37]/30"
+            ? "bg-[#B8860B]/20"
+            : "bg-[#F5D76E]/20"
         }`}
+        aria-label={getRoleLabel(message.role)}
       >
-        {isAdmin && (
-          <p className="text-xs font-semibold mb-1 text-white/90 uppercase tracking-wide">
-            Admin
-          </p>
+        {getAvatar(message.role)}
+      </div>
+
+      {/* Message content */}
+      <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[70%]`}>
+        {/* Role label for admin/agent */}
+        {(isAdmin || isAgent) && (
+          <span
+            className={`text-xs font-medium mb-1 ${
+              isAdmin ? "text-[#B8860B]" : "text-[#D4AF37]"
+            }`}
+          >
+            {getRoleLabel(message.role)}
+          </span>
         )}
-        <p className="text-sm whitespace-pre-wrap break-words">
-          {message.content}
-        </p>
-        <p
-          className={`text-xs mt-1 ${
-            isUser || isAdmin ? "text-white/80" : "text-gray-500"
+
+        {/* Message bubble */}
+        <div
+          className={`rounded-sm px-4 py-2.5 transition-all duration-200 ${
+            isUser
+              ? "bg-[#D4AF37] text-white shadow-sm"
+              : isAdmin
+              ? "bg-[#B8860B] text-white shadow-sm border border-[#D4AF37]"
+              : "bg-white text-gray-900 border border-[#D4AF37]/30 shadow-sm"
           }`}
         >
-          {formatTime(message.timestamp)}
+          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+            {message.content}
+          </p>
+        </div>
+
+        {/* Timestamp */}
+        <p
+          className={`text-xs mt-1 px-1 ${
+            isUser || isAdmin ? "text-gray-500" : "text-gray-400"
+          }`}
+        >
+          {formatMessageTime(message.timestamp)}
         </p>
       </div>
     </div>
   );
-};
+});
+
+MessageBubble.displayName = "MessageBubble";
 
 
 

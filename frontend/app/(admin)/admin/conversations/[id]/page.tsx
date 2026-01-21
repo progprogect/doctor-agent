@@ -1,4 +1,4 @@
-/** Conversation detail page. */
+/** Conversation detail page with improved layout and human-readable labels. */
 
 "use client";
 
@@ -7,15 +7,22 @@ import { useParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Button } from "@/components/shared/Button";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useAdminConversation } from "@/lib/hooks/useAdminConversation";
 import { useMessages } from "@/lib/hooks/useMessages";
 import { useAdminWebSocket } from "@/lib/hooks/useAdminWebSocket";
 import { handleApiError, getUserFriendlyMessage } from "@/lib/errorHandler";
 import type { Conversation } from "@/lib/types/conversation";
 import type { Message } from "@/lib/types/message";
+import type { Agent } from "@/lib/types/agent";
 import { getChannelDisplay, isInstagramChannel } from "@/lib/utils/channelDisplay";
+import { getConversationDisplayId } from "@/lib/utils/conversationDisplay";
+import { getAgentDisplayName, getAgentSpecialty, getClinicDisplayName, getDoctorDisplayName } from "@/lib/utils/agentDisplay";
+import { formatDateTime } from "@/lib/utils/timeFormat";
+import { toConversationStatus } from "@/lib/utils/statusHelpers";
 
 export default function ConversationDetailPage() {
   const params = useParams();
@@ -40,9 +47,30 @@ export default function ConversationDetailPage() {
 
   const { onConversationUpdate } = useAdminWebSocket();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [agent, setAgent] = useState<Agent | null>(null);
+  const [isLoadingAgent, setIsLoadingAgent] = useState(false);
+
   const isLoading = conversationLoading || messagesLoading;
   const isRefreshing = conversationRefreshing || messagesRefreshing;
   const error = conversationError || messagesError || actionError;
+
+  // Load agent data
+  useEffect(() => {
+    if (conversation?.agent_id) {
+      const loadAgent = async () => {
+        try {
+          setIsLoadingAgent(true);
+          const agentData = await api.getAgent(conversation.agent_id);
+          setAgent(agentData);
+        } catch (err) {
+          console.error("Failed to load agent:", err);
+        } finally {
+          setIsLoadingAgent(false);
+        }
+      };
+      loadAgent();
+    }
+  }, [conversation?.agent_id]);
 
   // Listen for WebSocket updates for this conversation
   useEffect(() => {
@@ -81,9 +109,6 @@ export default function ConversationDetailPage() {
   };
 
   const handleSendAdminMessage = async (content: string) => {
-    // #region agent log - disabled on production (CORS/TLS issues)
-    // fetch('http://127.0.0.1:7242/ingest/126a4647-5038-49ca-aac8-2a19a486f321',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:83',message:'handleSendAdminMessage entry',data:{conversationId,content:content.substring(0,50),currentMessagesCount:messages?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     try {
       setActionError(null);
       
@@ -101,25 +126,15 @@ export default function ConversationDetailPage() {
       // Add optimistic message to the list immediately
       const currentMessages = messages || [];
       setMessagesState([...currentMessages, optimisticMessage]);
-      // #region agent log - disabled on production
-      // #endregion
       
       // Send message to backend
-      const response = await api.sendAdminMessage(conversationId, "admin_user", content);
-      // #region agent log - disabled on production
-      // #endregion
+      await api.sendAdminMessage(conversationId, "admin_user", content);
       
       // Wait a bit for message to be saved to DB, then refresh to get real message with correct ID
       setTimeout(async () => {
-        // #region agent log - disabled on production
-        // #endregion
         await refreshMessages();
-        // #region agent log - disabled on production
-        // #endregion
       }, 500);
     } catch (err) {
-      // #region agent log - disabled on production
-      // #endregion
       // Remove optimistic message on error by refreshing
       const errorInfo = handleApiError(err);
       setActionError(getUserFriendlyMessage(errorInfo));
@@ -142,19 +157,24 @@ export default function ConversationDetailPage() {
 
   if (error || !conversation) {
     return (
-      <div className="bg-red-50 border-l-4 border-red-500 p-4">
+      <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-sm" role="alert">
         <p className="text-sm text-red-700">{error || "Conversation not found"}</p>
       </div>
     );
   }
 
+  const agentDisplayName = agent ? getAgentDisplayName(agent) : conversation.agent_id;
+  const clinicName = agent ? getClinicDisplayName(agent) : null;
+  const doctorName = agent ? getDoctorDisplayName(agent) : null;
+  const specialty = agent ? getAgentSpecialty(agent) : null;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Conversation</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            {conversation.conversation_id}
+          <h1 className="text-2xl font-bold text-gray-900">Conversation Details</h1>
+          <p className="text-sm text-gray-500 mt-1 font-mono">
+            {getConversationDisplayId(conversation, "detail")}
           </p>
         </div>
         <div className="flex gap-2">
@@ -172,59 +192,118 @@ export default function ConversationDetailPage() {
       </div>
 
       {actionError && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-sm">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-sm" role="alert">
           <p className="text-sm text-red-700">{actionError}</p>
         </div>
       )}
 
-      <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 p-6 mb-6">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-gray-500">Status</p>
-            <p className="text-sm font-medium text-gray-900">{conversation.status}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Agent ID</p>
-            <p className="text-sm font-medium text-gray-900">{conversation.agent_id}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Channel</p>
-            <p className="text-sm font-medium text-gray-900">
-              {getChannelDisplay(conversation.channel)}
-            </p>
-          </div>
-          {isInstagramChannel(conversation.channel) && (
-            <>
-              {conversation.external_user_id && (
+      {/* Info Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* Agent Info Card */}
+        <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 p-6">
+          <h3 className="text-sm font-medium text-gray-500 mb-3">Agent Information</h3>
+          {isLoadingAgent ? (
+            <LoadingSpinner size="sm" />
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs text-gray-500">Agent Name</p>
+                <p className="text-sm font-medium text-gray-900">{agentDisplayName}</p>
+              </div>
+              {clinicName && (
                 <div>
-                  <p className="text-sm text-gray-500">Instagram User ID</p>
-                  <p className="text-sm font-medium text-gray-900">{conversation.external_user_id}</p>
+                  <p className="text-xs text-gray-500">Clinic</p>
+                  <p className="text-sm font-medium text-gray-900">{clinicName}</p>
                 </div>
               )}
-              {conversation.external_conversation_id && (
+              {doctorName && (
                 <div>
-                  <p className="text-sm text-gray-500">Instagram Thread ID</p>
-                  <p className="text-sm font-medium text-gray-900">{conversation.external_conversation_id}</p>
+                  <p className="text-xs text-gray-500">Doctor</p>
+                  <p className="text-sm font-medium text-gray-900">{doctorName}</p>
                 </div>
               )}
-            </>
-          )}
-          {conversation.handoff_reason && (
-            <div>
-              <p className="text-sm text-gray-500">Handoff Reason</p>
-              <p className="text-sm font-medium text-gray-900">
-                {conversation.handoff_reason}
-              </p>
+              {specialty && (
+                <div>
+                  <p className="text-xs text-gray-500">Specialty</p>
+                  <p className="text-sm font-medium text-gray-900">{specialty}</p>
+                </div>
+              )}
+              <div className="pt-2 border-t border-gray-200">
+                <p className="text-xs text-gray-500">Agent ID</p>
+                <p className="text-xs font-mono text-gray-600">{conversation.agent_id}</p>
+              </div>
             </div>
           )}
         </div>
+
+        {/* Conversation Info Card */}
+        <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 p-6">
+          <h3 className="text-sm font-medium text-gray-500 mb-3">Conversation Information</h3>
+          <div className="space-y-2">
+            <div>
+              <p className="text-xs text-gray-500">Status</p>
+              <div className="mt-1">
+                <StatusBadge status={toConversationStatus(conversation.status)} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Channel</p>
+              <p className="text-sm font-medium text-gray-900">
+                {getChannelDisplay(conversation.channel)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Created</p>
+              <p className="text-sm font-medium text-gray-900">
+                {formatDateTime(conversation.created_at)}
+              </p>
+            </div>
+            {conversation.closed_at && (
+              <div>
+                <p className="text-xs text-gray-500">Closed</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {formatDateTime(conversation.closed_at)}
+                </p>
+              </div>
+            )}
+            {conversation.handoff_reason && (
+              <div>
+                <p className="text-xs text-gray-500">Handoff Reason</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {conversation.handoff_reason}
+                </p>
+              </div>
+            )}
+            {isInstagramChannel(conversation.channel) && (
+              <>
+                {conversation.external_user_id && (
+                  <div className="pt-2 border-t border-gray-200">
+                    <p className="text-xs text-gray-500">Instagram User ID</p>
+                    <p className="text-xs font-mono text-gray-600">{conversation.external_user_id}</p>
+                  </div>
+                )}
+                {conversation.external_conversation_id && (
+                  <div>
+                    <p className="text-xs text-gray-500">Instagram Thread ID</p>
+                    <p className="text-xs font-mono text-gray-600">{conversation.external_conversation_id}</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* Messages Section */}
       <div className="bg-white rounded-sm shadow border border-[#D4AF37]/20 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Messages</h2>
-        <div className="space-y-4 mb-4">
+        <div className="space-y-4 mb-4 min-h-[200px]">
           {messages.length === 0 ? (
-            <p className="text-gray-600 text-center py-8">No messages yet</p>
+            <EmptyState
+              icon="💬"
+              title="No messages yet"
+              description="Messages will appear here once the conversation starts."
+            />
           ) : (
             messages.map((message) => (
               <MessageBubble key={message.message_id} message={message} />
@@ -245,4 +324,3 @@ export default function ConversationDetailPage() {
     </div>
   );
 }
-

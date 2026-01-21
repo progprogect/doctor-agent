@@ -95,7 +95,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
             value={config.doctor_display_name || ""}
             onChange={(e) => onUpdate({ doctor_display_name: e.target.value })}
             error={getFieldError(errors, "doctor_display_name")}
-            placeholder="Dr. [Имя Фамилия]"
+            placeholder="Dr. John Smith"
             required
           />
         </div>

@@ -6,6 +6,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { Button } from "@/components/shared/Button";
+import { Badge } from "@/components/shared/Badge";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { getAgentDisplayName, getAgentInitials, getAgentSpecialty } from "@/lib/utils/agentDisplay";
 import type { Agent } from "@/lib/types/agent";
 
 export default function Home() {
@@ -52,12 +56,9 @@ export default function Home() {
         <div className="text-center max-w-md">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-[#D4AF37] text-white rounded-sm hover:bg-[#B8860B] transition-all duration-200 shadow-sm hover:shadow-md"
-          >
+          <Button variant="primary" onClick={() => window.location.reload()}>
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -71,60 +72,73 @@ export default function Home() {
             <span className="text-[#D4AF37]">Doctor</span> Agent
           </h1>
           <p className="text-xl text-gray-600">
-            Выберите врача для начала консультации
+            Select a doctor to start a consultation
           </p>
         </div>
 
         {agents.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600 mb-4">Нет доступных агентов</p>
-            <a
-              href="/admin/agents"
-              className="text-[#D4AF37] hover:text-[#B8860B] underline transition-colors duration-200"
-            >
-              Перейти в админ панель
-            </a>
-          </div>
+          <EmptyState
+            icon="👨‍⚕️"
+            title="No agents available"
+            description="Please contact the administrator to set up agents."
+            action={
+              <a
+                href="/admin/agents"
+                className="text-[#D4AF37] hover:text-[#B8860B] underline transition-colors duration-200"
+              >
+                Go to Admin Panel
+              </a>
+            }
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-            {agents.map((agent) => (
-              <div
-                key={agent.agent_id}
-                className="bg-white rounded-sm shadow-md border border-[#D4AF37]/20 p-6 hover:shadow-lg hover:border-[#D4AF37]/40 transition-all duration-200 cursor-pointer"
-                onClick={() => handleStartChat(agent.agent_id)}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-1">
-                      {agent.config?.profile?.clinic_display_name ||
-                        agent.agent_id}
-                    </h3>
-                    {agent.config?.profile?.doctor_display_name && (
-                      <p className="text-sm text-gray-600">
-                        {agent.config.profile.doctor_display_name}
-                      </p>
-                    )}
+            {agents.map((agent) => {
+              const displayName = getAgentDisplayName(agent);
+              const initials = getAgentInitials(agent);
+              const specialty = getAgentSpecialty(agent);
+
+              return (
+                <div
+                  key={agent.agent_id}
+                  className="bg-white rounded-sm shadow-md border border-[#D4AF37]/20 p-6 hover:shadow-lg hover:border-[#D4AF37]/40 transition-all duration-200 cursor-pointer"
+                  onClick={() => handleStartChat(agent.agent_id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      handleStartChat(agent.agent_id);
+                    }
+                  }}
+                  aria-label={`Start chat with ${displayName}`}
+                >
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-full bg-[#F5D76E]/20 flex items-center justify-center text-lg font-medium text-[#B8860B]">
+                      {initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-semibold text-gray-900 mb-1 truncate">
+                        {displayName}
+                      </h3>
+                      {specialty && (
+                        <p className="text-sm text-gray-600 truncate">{specialty}</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-3xl">👨‍⚕️</div>
-                </div>
 
-
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`px-3 py-1 rounded-sm text-xs font-medium ${
-                      agent.is_active
-                        ? "bg-[#F5D76E]/20 text-[#B8860B] border border-[#D4AF37]/30"
-                        : "bg-gray-100 text-gray-800"
-                    }`}
-                  >
-                    {agent.is_active ? "Активен" : "Неактивен"}
-                  </span>
-                  <button className="px-4 py-2 bg-[#D4AF37] text-white rounded-sm hover:bg-[#B8860B] text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md">
-                    Начать чат →
-                  </button>
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <Badge variant={agent.is_active ? "success" : "default"} size="sm">
+                      {agent.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                    <Button variant="primary" size="sm" onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartChat(agent.agent_id);
+                    }}>
+                      Start Chat
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -133,7 +147,7 @@ export default function Home() {
             href="/admin/agents"
             className="text-gray-600 hover:text-[#D4AF37] underline text-sm transition-colors duration-200"
           >
-            Админ панель
+            Admin Panel
           </a>
         </div>
       </div>

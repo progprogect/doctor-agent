@@ -60,12 +60,12 @@ export const Sidebar: React.FC = () => {
   }, [onStatsUpdate, onNewEscalation]);
 
   return (
-    <div className="w-64 bg-white border-r border-[#D4AF37]/20 flex flex-col flex-shrink-0">
+    <aside className="w-64 bg-white border-r border-[#D4AF37]/20 flex flex-col flex-shrink-0" aria-label="Admin navigation">
       <div className="p-6 border-b border-[#D4AF37]/20">
         <h1 className="text-xl font-bold text-[#D4AF37]">Doctor Agent</h1>
         <p className="text-sm text-gray-600">Admin Panel</p>
       </div>
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-2" aria-label="Main navigation">
         {navigation.map((item) => {
           const isActive = pathname === item.href;
           const isConversations = item.href === "/admin/conversations";
@@ -80,13 +80,18 @@ export const Sidebar: React.FC = () => {
                   ? "bg-[#F5D76E]/20 text-[#B8860B] font-medium border-l-2 border-[#D4AF37]"
                   : "text-gray-700 hover:bg-[#F5D76E]/10 hover:text-[#D4AF37]"
               }`}
+              aria-current={isActive ? "page" : undefined}
+              aria-label={`Navigate to ${item.name}${showBadge ? ` (${needsHumanCount} require attention)` : ""}`}
             >
               <div className="flex items-center gap-3">
-                <span className="text-xl">{item.icon}</span>
+                <span className="text-xl" aria-hidden="true">{item.icon}</span>
                 <span>{item.name}</span>
               </div>
               {showBadge && (
-                <span className="bg-[#F59E0B] text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                <span
+                  className="bg-[#F59E0B] text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center"
+                  aria-label={`${needsHumanCount} conversation${needsHumanCount !== 1 ? "s" : ""} require${needsHumanCount === 1 ? "s" : ""} attention`}
+                >
                   {needsHumanCount > 99 ? "99+" : needsHumanCount}
                 </span>
               )}
@@ -94,7 +99,7 @@ export const Sidebar: React.FC = () => {
           );
         })}
       </nav>
-    </div>
+    </aside>
   );
 };
 
