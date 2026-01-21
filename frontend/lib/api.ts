@@ -320,6 +320,18 @@ export const api = {
     );
   },
 
+  async refreshInstagramProfile(
+    conversationId: string
+  ): Promise<{ name?: string; username?: string; profile_pic?: string; error?: string }> {
+    return request(
+      `/api/v1/admin/conversations/${conversationId}/refresh-profile`,
+      {
+        method: "POST",
+      },
+      true // require auth
+    );
+  },
+
   async getAuditLogs(params?: {
     admin_id?: string;
     resource_type?: string;

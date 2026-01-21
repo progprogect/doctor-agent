@@ -47,6 +47,16 @@ class Conversation(BaseModel):
     ttl: Optional[int] = Field(
         None, description="TTL timestamp for DynamoDB (created_at + 48h)"
     )
+    # Instagram user profile fields (populated from profile table when fetching)
+    external_user_name: Optional[str] = Field(
+        None, description="Instagram user display name"
+    )
+    external_user_username: Optional[str] = Field(
+        None, description="Instagram username"
+    )
+    external_user_profile_pic: Optional[str] = Field(
+        None, description="Instagram profile picture URL"
+    )
 
     class Config:
         """Pydantic config."""

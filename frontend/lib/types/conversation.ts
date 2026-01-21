@@ -19,6 +19,9 @@ export interface Conversation {
   handoff_reason?: string | null;
   request_type?: string | null;
   ttl?: number;
+  external_user_name?: string | null;
+  external_user_username?: string | null;
+  external_user_profile_pic?: string | null;
 }
 
 export interface CreateConversationRequest {

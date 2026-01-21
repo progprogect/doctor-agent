@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useAdminConversation } from "@/lib/hooks/useAdminConversation";
 import { useMessages } from "@/lib/hooks/useMessages";
 import { useAdminWebSocket } from "@/lib/hooks/useAdminWebSocket";
@@ -49,6 +50,7 @@ export default function ConversationDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [isLoadingAgent, setIsLoadingAgent] = useState(false);
+  const [isRefreshingProfile, setIsRefreshingProfile] = useState(false);
 
   const isLoading = conversationLoading || messagesLoading;
   const isRefreshing = conversationRefreshing || messagesRefreshing;
@@ -146,6 +148,30 @@ export default function ConversationDetailPage() {
   const canSendAdminMessage =
     conversation?.status === "NEEDS_HUMAN" ||
     conversation?.status === "HUMAN_ACTIVE";
+
+  const handleRefreshProfile = async () => {
+    if (!conversation || !isInstagramChannel(conversation.channel)) {
+      return;
+    }
+
+    try {
+      setIsRefreshingProfile(true);
+      setActionError(null);
+      const profileData = await api.refreshInstagramProfile(conversationId);
+      
+      if (profileData.error) {
+        setActionError(profileData.error);
+      } else {
+        // Refresh conversation to get updated profile data
+        await refreshConversation();
+      }
+    } catch (err) {
+      const errorInfo = handleApiError(err);
+      setActionError(getUserFriendlyMessage(errorInfo));
+    } finally {
+      setIsRefreshingProfile(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -276,14 +302,58 @@ export default function ConversationDetailPage() {
             )}
             {isInstagramChannel(conversation.channel) && (
               <>
-                {conversation.external_user_id && (
-                  <div className="pt-2 border-t border-gray-200">
-                    <p className="text-xs text-gray-500">Instagram User ID</p>
-                    <p className="text-xs font-mono text-gray-600">{conversation.external_user_id}</p>
+                {/* Instagram User Profile Section */}
+                <div className="pt-2 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-500">Instagram User</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRefreshProfile}
+                      disabled={isRefreshingProfile}
+                      isLoading={isRefreshingProfile}
+                    >
+                      {isRefreshingProfile ? "Refreshing..." : "Refresh Profile"}
+                    </Button>
                   </div>
-                )}
+                  {conversation.external_user_name || conversation.external_user_profile_pic ? (
+                    <div className="flex items-center gap-3">
+                      <UserAvatar
+                        src={conversation.external_user_profile_pic}
+                        name={conversation.external_user_name}
+                        size="lg"
+                      />
+                      <div className="flex flex-col">
+                        {conversation.external_user_name && (
+                          <p className="text-sm font-medium text-gray-900">
+                            {conversation.external_user_name}
+                          </p>
+                        )}
+                        {conversation.external_user_username && (
+                          <p className="text-xs text-gray-500">@{conversation.external_user_username}</p>
+                        )}
+                        {conversation.external_user_id && (
+                          <p className="text-xs text-gray-400 font-mono mt-1">
+                            ID: {conversation.external_user_id}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {conversation.external_user_id && (
+                        <p className="text-xs font-mono text-gray-600">
+                          User ID: {conversation.external_user_id}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        Profile information not available. Click "Refresh Profile" to fetch.
+                      </p>
+                    </div>
+                  )}
+                </div>
                 {conversation.external_conversation_id && (
-                  <div>
+                  <div className="pt-2">
                     <p className="text-xs text-gray-500">Instagram Thread ID</p>
                     <p className="text-xs font-mono text-gray-600">{conversation.external_conversation_id}</p>
                   </div>

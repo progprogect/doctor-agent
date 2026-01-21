@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.config import Settings, get_settings
 from app.models.channel_binding import ChannelBinding
 from app.models.conversation import Conversation, ConversationStatus
+from app.models.instagram_user_profile import InstagramUserProfile
 from app.models.message import Message, MessageRole
 from app.utils.enum_helpers import get_enum_value
 
@@ -39,6 +40,7 @@ class DynamoDBClient:
             "agents": self.dynamodb.Table(settings.dynamodb_table_agents),
             "audit_logs": self.dynamodb.Table(settings.dynamodb_table_audit_logs),
             "channel_bindings": self.dynamodb.Table(settings.dynamodb_table_channel_bindings),
+            "instagram_profiles": self.dynamodb.Table(settings.dynamodb_table_instagram_profiles),
         }
         self.message_ttl_seconds = settings.message_ttl_hours * 3600
         
@@ -112,6 +114,12 @@ class DynamoDBClient:
     def _calculate_ttl(self, base_time: datetime) -> int:
         """Calculate TTL timestamp (Unix epoch seconds)."""
         expiry_time = base_time + timedelta(seconds=self.message_ttl_seconds)
+        return int(expiry_time.timestamp())
+
+    def _calculate_profile_ttl(self, base_time: datetime) -> int:
+        """Calculate TTL timestamp for Instagram profiles (5 days = 432000 seconds)."""
+        profile_ttl_seconds = 5 * 24 * 3600  # 5 days
+        expiry_time = base_time + timedelta(seconds=profile_ttl_seconds)
         return int(expiry_time.timestamp())
 
     # Conversation operations
@@ -749,6 +757,48 @@ class DynamoDBClient:
 
         response = self.tables["audit_logs"].scan(**scan_kwargs)
         return response.get("Items", [])
+
+    # Instagram profile operations
+    async def create_or_update_instagram_profile(
+        self, profile: InstagramUserProfile
+    ) -> InstagramUserProfile:
+        """Create or update Instagram user profile."""
+        item = profile.model_dump(exclude_none=True)
+        # Convert datetime objects to ISO format strings for DynamoDB
+        if "updated_at" in item and isinstance(item["updated_at"], datetime):
+            item["updated_at"] = item["updated_at"].isoformat()
+        # Ensure TTL is set
+        if "ttl" not in item or not item["ttl"]:
+            item["ttl"] = self._calculate_profile_ttl(profile.updated_at)
+
+        self.tables["instagram_profiles"].put_item(Item=item)
+        logger.info(f"Created/updated Instagram profile for user {profile.external_user_id}")
+        return profile
+
+    async def get_instagram_profile(
+        self, external_user_id: str
+    ) -> Optional[InstagramUserProfile]:
+        """Get Instagram user profile by external_user_id."""
+        try:
+            response = self.tables["instagram_profiles"].get_item(
+                Key={"external_user_id": external_user_id}
+            )
+            item = response.get("Item")
+            if not item:
+                return None
+
+            # Parse datetime from ISO string
+            if "updated_at" in item and isinstance(item["updated_at"], str):
+                try:
+                    item["updated_at"] = datetime.fromisoformat(item["updated_at"].replace("Z", "+00:00"))
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Failed to parse updated_at for profile {external_user_id}: {e}, using current time")
+                    item["updated_at"] = datetime.utcnow()
+
+            return InstagramUserProfile(**item)
+        except Exception as e:
+            logger.error(f"Failed to get Instagram profile for {external_user_id}: {e}")
+            return None
 
 
 @lru_cache()

@@ -5,7 +5,7 @@ import hmac
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 import httpx
@@ -13,6 +13,7 @@ import httpx
 from app.config import Settings, get_settings
 from app.models.channel_binding import ChannelType
 from app.models.conversation import Conversation, ConversationStatus
+from app.models.instagram_user_profile import InstagramUserProfile
 from app.models.message import Message, MessageChannel, MessageRole
 from app.services.channel_binding_service import ChannelBindingService
 from app.storage.dynamodb import DynamoDBClient
@@ -406,6 +407,112 @@ class InstagramService:
 
             logger.info(f"Sent Instagram message to {recipient_id}")
             return result
+
+    async def get_user_profile(
+        self, igsid: str, access_token: str
+    ) -> Optional[InstagramUserProfile]:
+        """Get Instagram user profile information from Instagram Graph API.
+        
+        Args:
+            igsid: Instagram-scoped ID (IGSID) of the user
+            access_token: Instagram user access token
+            
+        Returns:
+            InstagramUserProfile if successful, None otherwise
+        """
+        url = f"{self.GRAPH_API_BASE_URL}/{igsid}"
+        params = {
+            "fields": "name,username,profile_pic",
+            "access_token": access_token,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, params=params)
+
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                    except Exception as e:
+                        logger.error(f"Failed to parse JSON response for Instagram profile {igsid}: {e}")
+                        return None
+                    
+                    # Create profile object with proper TTL
+                    updated_at = datetime.utcnow()
+                    profile = InstagramUserProfile(
+                        external_user_id=igsid,
+                        name=data.get("name"),
+                        username=data.get("username"),
+                        profile_pic=data.get("profile_pic"),
+                        updated_at=updated_at,
+                        ttl=int((updated_at + timedelta(days=5)).timestamp()),
+                    )
+                    logger.info(f"Successfully fetched Instagram profile for user {igsid}")
+                    return profile
+                elif response.status_code == 400:
+                    try:
+                        error_data = response.json()
+                        error_message = error_data.get("error", {}).get("message", "")
+                        error_code = error_data.get("error", {}).get("code", 0)
+                    except Exception:
+                        error_message = "Bad request"
+                        error_code = 0
+                    
+                    # Handle specific error cases
+                    if "User consent is required" in error_message or error_code == 200:
+                        logger.warning(
+                            f"User consent required for Instagram profile {igsid}: {error_message}"
+                        )
+                    elif "user blocked" in error_message.lower():
+                        logger.warning(f"User {igsid} has blocked this account")
+                    else:
+                        logger.warning(
+                            f"Failed to fetch Instagram profile for {igsid}: {error_message}"
+                        )
+                    return None
+                elif response.status_code == 429:
+                    # Rate limit
+                    logger.warning(f"Rate limit exceeded when fetching Instagram profile for {igsid}")
+                    return None
+                else:
+                    error_text = response.text
+                    logger.error(
+                        f"Failed to fetch Instagram profile for {igsid}: {response.status_code} - {error_text}"
+                    )
+                    return None
+        except httpx.TimeoutException:
+            logger.error(f"Timeout when fetching Instagram profile for {igsid}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching Instagram profile for {igsid}: {e}")
+            return None
+
+    async def refresh_user_profile(
+        self, external_user_id: str, binding_id: str
+    ) -> Optional[InstagramUserProfile]:
+        """Refresh Instagram user profile and save to DynamoDB.
+        
+        Args:
+            external_user_id: Instagram-scoped ID (IGSID) of the user
+            binding_id: Channel binding ID to get access token
+            
+        Returns:
+            InstagramUserProfile if successful, None otherwise
+        """
+        # Get access token
+        access_token = await self.channel_binding_service.get_access_token(binding_id)
+
+        # Fetch profile from Instagram API
+        profile = await self.get_user_profile(external_user_id, access_token)
+        
+        if profile:
+            # Profile already has correct TTL from get_user_profile, just save it
+            await self.dynamodb.create_or_update_instagram_profile(profile)
+            logger.info(f"Refreshed and saved Instagram profile for user {external_user_id}")
+            return profile
+        else:
+            logger.warning(f"Failed to refresh Instagram profile for user {external_user_id}")
+            return None
 
     async def subscribe_to_webhook(
         self, account_id: str, access_token: str

@@ -13,6 +13,7 @@ import { ConfirmModal } from "@/components/shared/ConfirmModal";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Tooltip } from "@/components/shared/Tooltip";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { api } from "@/lib/api";
 import Link from "next/link";
 import type { Conversation } from "@/lib/types/conversation";
@@ -256,17 +257,34 @@ export default function ConversationsPage() {
                             ⚠️
                           </span>
                         )}
+                        {/* Show avatar for Instagram conversations with profile */}
+                        {conv.channel === "instagram" && (conv.external_user_name || conv.external_user_profile_pic) && (
+                          <UserAvatar
+                            src={conv.external_user_profile_pic}
+                            name={conv.external_user_name}
+                            size="sm"
+                          />
+                        )}
                         <div className="flex flex-col">
                           <span
                             className={`text-sm ${
                               needsAttention ? "font-bold text-gray-900" : "font-medium text-gray-900"
                             }`}
                           >
-                            {getConversationDisplayId(conv, "list")}
+                            {conv.channel === "instagram" && conv.external_user_name
+                              ? conv.external_user_name
+                              : getConversationDisplayId(conv, "list")}
                           </span>
-                          <span className="text-xs text-gray-500 font-mono">
-                            {conv.conversation_id.substring(0, 8)}...
-                          </span>
+                          {conv.channel === "instagram" && conv.external_user_username && (
+                            <span className="text-xs text-gray-500">
+                              @{conv.external_user_username}
+                            </span>
+                          )}
+                          {(!conv.external_user_name || conv.channel !== "instagram") && (
+                            <span className="text-xs text-gray-500 font-mono">
+                              {conv.conversation_id.substring(0, 8)}...
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>

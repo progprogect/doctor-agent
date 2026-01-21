@@ -91,6 +91,17 @@ async def get_conversation(
     conversation = await deps.dynamodb.get_conversation(conversation_id)
     if not conversation:
         raise ConversationNotFoundError(conversation_id)
+    
+    # If this is an Instagram conversation, try to fetch profile data
+    from app.utils.enum_helpers import get_enum_value
+    conversation_channel = get_enum_value(conversation.channel)
+    if conversation_channel == MessageChannel.INSTAGRAM.value and conversation.external_user_id:
+        profile = await deps.dynamodb.get_instagram_profile(conversation.external_user_id)
+        if profile:
+            conversation.external_user_name = profile.name
+            conversation.external_user_username = profile.username
+            conversation.external_user_profile_pic = profile.profile_pic
+    
     return conversation
 
 
@@ -391,6 +402,100 @@ async def send_admin_message(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to send admin message: {str(e)}",
+        )
+
+
+class RefreshProfileResponse(BaseModel):
+    """Response for profile refresh."""
+
+    name: Optional[str] = None
+    username: Optional[str] = None
+    profile_pic: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post(
+    "/conversations/{conversation_id}/refresh-profile",
+    response_model=RefreshProfileResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def refresh_instagram_profile(
+    conversation_id: str,
+    deps: CommonDependencies = Depends(),
+    _admin: str = require_admin(),
+):
+    """Refresh Instagram user profile information."""
+    # Validate UUID format
+    try:
+        UUID(conversation_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid conversation ID format",
+        )
+
+    # Get conversation
+    conversation = await deps.dynamodb.get_conversation(conversation_id)
+    if not conversation:
+        raise ConversationNotFoundError(conversation_id)
+
+    # Verify it's an Instagram conversation
+    conversation_channel = get_enum_value(conversation.channel)
+    if conversation_channel != MessageChannel.INSTAGRAM.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This endpoint is only available for Instagram conversations",
+        )
+
+    if not conversation.external_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Conversation does not have an external user ID",
+        )
+
+    # Find active binding for agent
+    secrets_manager = get_secrets_manager()
+    binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
+    
+    bindings = await binding_service.get_bindings_by_agent(
+        agent_id=conversation.agent_id,
+        channel_type=MessageChannel.INSTAGRAM.value,
+        active_only=True,
+    )
+
+    if not bindings:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active Instagram binding found for this agent",
+        )
+
+    binding_id = bindings[0].binding_id
+
+    # Get Instagram service
+    instagram_service = InstagramService(
+        binding_service, deps.dynamodb, get_settings()
+    )
+
+    # Refresh profile
+    try:
+        profile = await instagram_service.refresh_user_profile(
+            conversation.external_user_id, binding_id
+        )
+
+        if profile:
+            return RefreshProfileResponse(
+                name=profile.name,
+                username=profile.username,
+                profile_pic=profile.profile_pic,
+            )
+        else:
+            return RefreshProfileResponse(
+                error="Failed to fetch profile. User consent may be required or user may have blocked this account."
+            )
+    except Exception as e:
+        logger.error(f"Error refreshing Instagram profile: {e}", exc_info=True)
+        return RefreshProfileResponse(
+            error=f"Failed to refresh profile: {str(e)}"
         )
 
 
