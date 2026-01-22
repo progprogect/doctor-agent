@@ -788,9 +788,12 @@ class DynamoDBClient:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
 
+        items: list[dict[str, Any]] = []
         try:
             response = self.tables["audit_logs"].scan(**scan_kwargs)
             items = response.get("Items", [])
+            if items is None:
+                items = []
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             error_message = e.response.get("Error", {}).get("Message", str(e))
@@ -803,12 +806,18 @@ class DynamoDBClient:
                     "limit": limit,
                 },
             )
+            # If table doesn't exist, return empty list
+            if error_code == "ResourceNotFoundException":
+                logger.warning("Audit logs table does not exist, returning empty list")
+                return []
             # Fallback: try without filters if filter expression fails
             if filter_expression:
                 try:
                     logger.info("Retrying audit logs scan without FilterExpression")
                     response = self.tables["audit_logs"].scan(Limit=min(limit * 2, 2000))
                     items = response.get("Items", [])
+                    if items is None:
+                        items = []
                     # Apply filters client-side
                     if admin_id:
                         items = [item for item in items if item.get("admin_id") == admin_id]
@@ -842,10 +851,17 @@ class DynamoDBClient:
                     return datetime.min
             return datetime.min
         
+        # Ensure items is a list
+        if not isinstance(items, list):
+            logger.warning(f"Items is not a list: {type(items)}, returning empty list")
+            return []
+        
         # Apply date filters
         if start_date or end_date:
             filtered_items = []
             for item in items:
+                if not isinstance(item, dict):
+                    continue
                 item_timestamp = get_timestamp(item)
                 if start_date and item_timestamp < start_date:
                     continue
@@ -854,8 +870,14 @@ class DynamoDBClient:
                 filtered_items.append(item)
             items = filtered_items
         
-        # Sort by timestamp
-        items.sort(key=get_timestamp, reverse=sort_desc)
+        # Sort by timestamp (only if we have items)
+        if items:
+            try:
+                items.sort(key=get_timestamp, reverse=sort_desc)
+            except Exception as e:
+                logger.error(f"Failed to sort audit logs: {e}", exc_info=True)
+                # Return unsorted if sorting fails
+                pass
         
         # Apply limit after filtering
         return items[:limit]
