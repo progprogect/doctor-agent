@@ -781,31 +781,37 @@ class DynamoDBClient:
                 filter_expression = action_filter
             expression_attribute_values[":action"] = action
 
-        if start_date:
-            start_filter = "timestamp >= :start_date"
-            if filter_expression:
-                filter_expression += " AND " + start_filter
-            else:
-                filter_expression = start_filter
-            expression_attribute_values[":start_date"] = start_date.isoformat()
-
-        if end_date:
-            end_filter = "timestamp <= :end_date"
-            if filter_expression:
-                filter_expression += " AND " + end_filter
-            else:
-                filter_expression = end_filter
-            expression_attribute_values[":end_date"] = end_date.isoformat()
-
-        scan_kwargs = {"Limit": limit}
+        # Note: Date filtering is done client-side after fetching
+        # because DynamoDB FilterExpression string comparison may not work reliably for ISO dates
+        scan_kwargs = {"Limit": limit * 2}  # Fetch more to account for date filtering
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
 
-        response = self.tables["audit_logs"].scan(**scan_kwargs)
-        items = response.get("Items", [])
+        try:
+            response = self.tables["audit_logs"].scan(**scan_kwargs)
+            items = response.get("Items", [])
+        except ClientError as e:
+            logger.error(f"Failed to scan audit logs: {e}", exc_info=True)
+            # Fallback: try without filters if filter expression fails
+            if filter_expression:
+                try:
+                    response = self.tables["audit_logs"].scan(Limit=limit * 2)
+                    items = response.get("Items", [])
+                    # Apply filters client-side
+                    if admin_id:
+                        items = [item for item in items if item.get("admin_id") == admin_id]
+                    if resource_type:
+                        items = [item for item in items if item.get("resource_type") == resource_type]
+                    if action:
+                        items = [item for item in items if item.get("action") == action]
+                except ClientError as e2:
+                    logger.error(f"Failed to scan audit logs even without filters: {e2}", exc_info=True)
+                    return []
+            else:
+                return []
         
-        # Sort by timestamp
+        # Filter by date range client-side
         def get_timestamp(item: dict[str, Any]) -> datetime:
             """Extract timestamp from audit log item."""
             ts_str = item.get("timestamp", "")
@@ -816,9 +822,23 @@ class DynamoDBClient:
                     return datetime.min
             return datetime.min
         
+        # Apply date filters
+        if start_date or end_date:
+            filtered_items = []
+            for item in items:
+                item_timestamp = get_timestamp(item)
+                if start_date and item_timestamp < start_date:
+                    continue
+                if end_date and item_timestamp > end_date:
+                    continue
+                filtered_items.append(item)
+            items = filtered_items
+        
+        # Sort by timestamp
         items.sort(key=get_timestamp, reverse=sort_desc)
         
-        return items
+        # Apply limit after filtering
+        return items[:limit]
 
     # Instagram profile operations
     async def create_or_update_instagram_profile(
