@@ -783,7 +783,7 @@ class DynamoDBClient:
 
         # Note: Date filtering is done client-side after fetching
         # because DynamoDB FilterExpression string comparison may not work reliably for ISO dates
-        scan_kwargs = {"Limit": limit * 2}  # Fetch more to account for date filtering
+        scan_kwargs: dict[str, Any] = {"Limit": min(limit * 2, 2000)}  # Fetch more to account for date filtering, but cap at 2000
         if filter_expression:
             scan_kwargs["FilterExpression"] = filter_expression
             scan_kwargs["ExpressionAttributeValues"] = expression_attribute_values
@@ -792,11 +792,22 @@ class DynamoDBClient:
             response = self.tables["audit_logs"].scan(**scan_kwargs)
             items = response.get("Items", [])
         except ClientError as e:
-            logger.error(f"Failed to scan audit logs: {e}", exc_info=True)
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            error_message = e.response.get("Error", {}).get("Message", str(e))
+            logger.error(
+                f"Failed to scan audit logs: {error_code} - {error_message}",
+                exc_info=True,
+                extra={
+                    "error_code": error_code,
+                    "has_filter": bool(filter_expression),
+                    "limit": limit,
+                },
+            )
             # Fallback: try without filters if filter expression fails
             if filter_expression:
                 try:
-                    response = self.tables["audit_logs"].scan(Limit=limit * 2)
+                    logger.info("Retrying audit logs scan without FilterExpression")
+                    response = self.tables["audit_logs"].scan(Limit=min(limit * 2, 2000))
                     items = response.get("Items", [])
                     # Apply filters client-side
                     if admin_id:
@@ -806,10 +817,19 @@ class DynamoDBClient:
                     if action:
                         items = [item for item in items if item.get("action") == action]
                 except ClientError as e2:
-                    logger.error(f"Failed to scan audit logs even without filters: {e2}", exc_info=True)
+                    error_code_2 = e2.response.get("Error", {}).get("Code", "Unknown")
+                    error_message_2 = e2.response.get("Error", {}).get("Message", str(e2))
+                    logger.error(
+                        f"Failed to scan audit logs even without filters: {error_code_2} - {error_message_2}",
+                        exc_info=True,
+                    )
                     return []
             else:
+                logger.error("No filter expression but scan still failed, returning empty list")
                 return []
+        except Exception as e:
+            logger.error(f"Unexpected error scanning audit logs: {e}", exc_info=True)
+            return []
         
         # Filter by date range client-side
         def get_timestamp(item: dict[str, Any]) -> datetime:

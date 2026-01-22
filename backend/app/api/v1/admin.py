@@ -248,43 +248,60 @@ async def get_audit_logs(
     _admin: str = require_admin(),
 ):
     """Get audit logs with filtering and sorting."""
-    # Validate sort parameter
-    if sort not in ["asc", "desc"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid sort parameter. Must be 'asc' or 'desc'",
+    try:
+        # Validate sort parameter
+        if sort not in ["asc", "desc"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid sort parameter. Must be 'asc' or 'desc'",
+            )
+        
+        # Parse dates if provided
+        start_datetime = None
+        end_datetime = None
+        if start_date:
+            try:
+                start_datetime = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except ValueError as e:
+                logger.warning(f"Invalid start_date format: {start_date}, error: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid start_date format. Use ISO format (e.g., 2024-01-01T00:00:00Z)",
+                )
+        if end_date:
+            try:
+                end_datetime = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except ValueError as e:
+                logger.warning(f"Invalid end_date format: {end_date}, error: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid end_date format. Use ISO format (e.g., 2024-01-01T00:00:00Z)",
+                )
+        
+        logs = await deps.dynamodb.list_audit_logs(
+            admin_id=admin_id,
+            resource_type=resource_type,
+            action=action,
+            start_date=start_datetime,
+            end_date=end_datetime,
+            sort_desc=sort == "desc",
+            limit=limit,
         )
-    
-    # Parse dates if provided
-    start_datetime = None
-    end_datetime = None
-    if start_date:
-        try:
-            start_datetime = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid start_date format. Use ISO format (e.g., 2024-01-01T00:00:00Z)",
-            )
-    if end_date:
-        try:
-            end_datetime = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid end_date format. Use ISO format (e.g., 2024-01-01T00:00:00Z)",
-            )
-    
-    logs = await deps.dynamodb.list_audit_logs(
-        admin_id=admin_id,
-        resource_type=resource_type,
-        action=action,
-        start_date=start_datetime,
-        end_date=end_datetime,
-        sort_desc=sort == "desc",
-        limit=limit,
-    )
-    return logs
+        
+        # Ensure we always return a list, even if empty
+        if not isinstance(logs, list):
+            logger.warning(f"list_audit_logs returned non-list: {type(logs)}")
+            return []
+        
+        return logs
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in get_audit_logs: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve audit logs: {str(e)}",
+        )
 
 
 class SendAdminMessageRequest(BaseModel):
