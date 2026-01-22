@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.api.auth import require_admin
 from app.api.exceptions import AgentNotFoundError
 from app.dependencies import CommonDependencies
+from app.utils.datetime_utils import to_utc_iso_string
 from app.models.channel_binding import ChannelBinding, ChannelType
 from app.services.channel_binding_service import ChannelBindingService
 from app.storage.secrets import get_secrets_manager
@@ -69,8 +70,8 @@ class ChannelBindingResponse(BaseModel):
             channel_username=binding.channel_username,
             is_active=binding.is_active,
             is_verified=binding.is_verified,
-            created_at=binding.created_at.isoformat(),
-            updated_at=binding.updated_at.isoformat(),
+            created_at=to_utc_iso_string(binding.created_at),
+            updated_at=to_utc_iso_string(binding.updated_at),
             created_by=binding.created_by,
             metadata=binding.metadata,
         )

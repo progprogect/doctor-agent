@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.models.message import MessageChannel
+from app.utils.datetime_utils import to_utc_iso_string, utc_now
 
 
 class ConversationStatus(str, Enum):
@@ -44,8 +45,8 @@ class Conversation(BaseModel):
     status: ConversationStatus = Field(
         default=ConversationStatus.AI_ACTIVE, description="Current conversation status"
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
     closed_at: Optional[datetime] = Field(None, description="When conversation was closed")
     handoff_reason: Optional[str] = Field(
         None, description="Reason for handoff to human"
@@ -78,7 +79,7 @@ class Conversation(BaseModel):
         """Pydantic config."""
 
         use_enum_values = True
-        json_encoders = {datetime: lambda v: v.isoformat()}
+        json_encoders = {datetime: lambda v: to_utc_iso_string(v) if v else None}
 
 
 

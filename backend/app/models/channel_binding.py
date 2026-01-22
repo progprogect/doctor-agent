@@ -6,6 +6,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
+from app.utils.datetime_utils import to_utc_iso_string, utc_now
+
 
 class ChannelType(str, Enum):
     """Channel type enumeration."""
@@ -40,8 +42,8 @@ class ChannelBinding(BaseModel):
     )
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
     created_by: Optional[str] = Field(
         None, description="Admin user ID who created the binding"
     )
@@ -60,5 +62,5 @@ class ChannelBinding(BaseModel):
         """Pydantic config."""
 
         use_enum_values = True
-        json_encoders = {datetime: lambda v: v.isoformat()}
+        json_encoders = {datetime: lambda v: to_utc_iso_string(v) if v else None}
 

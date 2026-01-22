@@ -21,6 +21,7 @@ from app.services.channel_binding_service import ChannelBindingService
 from app.services.channel_sender import get_channel_sender
 from app.services.instagram_service import InstagramService
 from app.storage.secrets import get_secrets_manager
+from app.utils.datetime_utils import to_utc_iso_string
 from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
@@ -261,7 +262,7 @@ async def get_audit_logs(
         end_datetime = None
         if start_date:
             try:
-                start_datetime = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+                start_datetime = parse_utc_datetime(start_date)
             except ValueError as e:
                 logger.warning(f"Invalid start_date format: {start_date}, error: {e}")
                 raise HTTPException(
@@ -270,7 +271,7 @@ async def get_audit_logs(
                 )
         if end_date:
             try:
-                end_datetime = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+                end_datetime = parse_utc_datetime(end_date)
             except ValueError as e:
                 logger.warning(f"Invalid end_date format: {end_date}, error: {e}")
                 raise HTTPException(
@@ -367,7 +368,7 @@ async def send_admin_message(
             content=request.content,
             channel=conversation.channel,
             external_user_id=conversation.external_user_id,
-            timestamp=datetime.utcnow(),
+            timestamp=utc_now(),
         )
 
         logger.info(f"Creating admin message: conversation_id={conversation_id}, message_id={message_id}, content_len={len(request.content)}")
@@ -435,7 +436,7 @@ async def send_admin_message(
                         "message_id": message_id,
                         "role": "admin",
                         "content": request.content,
-                        "timestamp": admin_message.timestamp.isoformat(),
+                        "timestamp": to_utc_iso_string(admin_message.timestamp),
                     },
                 )
             except Exception as ws_error:
@@ -457,7 +458,7 @@ async def send_admin_message(
             message_id=message_id,
             role=role_value,
             content=admin_message.content,
-            timestamp=admin_message.timestamp.isoformat(),
+            timestamp=to_utc_iso_string(admin_message.timestamp),
         )
     except Exception as e:
         logger.error(f"Error sending admin message: {e}", exc_info=True)
@@ -712,7 +713,7 @@ async def get_stats(
         )
 
     # Calculate date range based on period
-    now = datetime.utcnow()
+    now = utc_now()
     if period == "today":
         start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
         end_date = now
@@ -736,7 +737,7 @@ async def get_stats(
             created_dt = c.created_at
         elif isinstance(c.created_at, str):
             try:
-                created_dt = datetime.fromisoformat(c.created_at.replace("Z", "+00:00"))
+                created_dt = parse_utc_datetime(c.created_at)
             except (ValueError, AttributeError):
                 continue
         if created_dt and start_date <= created_dt <= end_date:
@@ -812,7 +813,7 @@ async def get_stats(
                 created_dt = c.created_at
             elif isinstance(c.created_at, str):
                 try:
-                    created_dt = datetime.fromisoformat(c.created_at.replace("Z", "+00:00"))
+                    created_dt = parse_utc_datetime(c.created_at)
                 except (ValueError, AttributeError):
                     continue
             if created_dt and prev_start <= created_dt < prev_end:

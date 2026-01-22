@@ -11,6 +11,7 @@ from fastapi.exceptions import HTTPException
 
 from app.config import get_settings
 from app.models.conversation import Conversation, ConversationStatus
+from app.utils.datetime_utils import to_utc_iso_string, utc_now
 from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
@@ -67,17 +68,17 @@ class AdminBroadcastManager:
                 "agent_id": conversation.agent_id,
                 "status": get_enum_value(conversation.status),
                 "created_at": (
-                    conversation.created_at.isoformat()
+                    to_utc_iso_string(conversation.created_at)
                     if hasattr(conversation.created_at, "isoformat")
                     else str(conversation.created_at)
                 ),
                 "updated_at": (
-                    conversation.updated_at.isoformat()
+                    to_utc_iso_string(conversation.updated_at)
                     if hasattr(conversation.updated_at, "isoformat")
                     else str(conversation.updated_at)
                 ),
                 "closed_at": (
-                    conversation.closed_at.isoformat()
+                    to_utc_iso_string(conversation.closed_at)
                     if conversation.closed_at
                     and hasattr(conversation.closed_at, "isoformat")
                     else (str(conversation.closed_at) if conversation.closed_at else None)
@@ -85,7 +86,7 @@ class AdminBroadcastManager:
                 "handoff_reason": conversation.handoff_reason,
                 "request_type": conversation.request_type,
             },
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": to_utc_iso_string(utc_now()),
         }
         await self._broadcast(message)
 
@@ -100,12 +101,12 @@ class AdminBroadcastManager:
                 "agent_id": conversation.agent_id,
                 "status": get_enum_value(conversation.status),
                 "created_at": (
-                    conversation.created_at.isoformat()
+                    to_utc_iso_string(conversation.created_at)
                     if hasattr(conversation.created_at, "isoformat")
                     else str(conversation.created_at)
                 ),
                 "updated_at": (
-                    conversation.updated_at.isoformat()
+                    to_utc_iso_string(conversation.updated_at)
                     if hasattr(conversation.updated_at, "isoformat")
                     else str(conversation.updated_at)
                 ),
@@ -113,7 +114,7 @@ class AdminBroadcastManager:
                 "request_type": conversation.request_type,
             },
             "escalation_reason": escalation_reason or conversation.handoff_reason,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": to_utc_iso_string(utc_now()),
         }
         await self._broadcast(message)
 
@@ -122,7 +123,7 @@ class AdminBroadcastManager:
         message = {
             "type": "stats_updated",
             "stats": stats,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": to_utc_iso_string(utc_now()),
         }
         await self._broadcast(message)
 
@@ -223,7 +224,7 @@ async def admin_websocket_endpoint(websocket: WebSocket):
             {
                 "type": "connected",
                 "admin_id": admin_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": to_utc_iso_string(utc_now()),
             }
         )
 
@@ -245,7 +246,7 @@ async def admin_websocket_endpoint(websocket: WebSocket):
                     {
                         "type": "error",
                         "message": "Invalid JSON format",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": to_utc_iso_string(utc_now()),
                     }
                 )
                 continue
@@ -263,7 +264,7 @@ async def admin_websocket_endpoint(websocket: WebSocket):
                     {
                         "type": "error",
                         "message": f"Unknown message type: {message_type}",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": to_utc_iso_string(utc_now()),
                     }
                 )
 

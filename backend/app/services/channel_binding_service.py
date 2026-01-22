@@ -8,6 +8,7 @@ from typing import Any, Optional
 from app.models.channel_binding import ChannelBinding, ChannelType
 from app.storage.dynamodb import DynamoDBClient
 from app.storage.secrets import SecretsManager
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +59,8 @@ class ChannelBindingService:
             is_verified=False,
             metadata=metadata,
             created_by=created_by,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utc_now(),
+            updated_at=utc_now(),
         )
 
         await self.dynamodb.create_channel_binding(binding)

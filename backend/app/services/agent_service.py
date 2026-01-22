@@ -15,6 +15,7 @@ from app.services.llm_factory import LLMFactory, get_llm_factory
 from app.services.moderation_service import ModerationService, get_moderation_service
 from app.services.rag_service import RAGService, get_rag_service
 from app.storage.dynamodb import DynamoDBClient
+from app.utils.datetime_utils import to_utc_iso_string
 from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
@@ -217,8 +218,9 @@ class AgentService:
                 }
 
         # Save agent message to database first
-        from datetime import datetime
         import uuid
+
+        from app.utils.datetime_utils import utc_now
 
         conversation = await self.dynamodb.get_conversation(conversation_id)
         agent_message_id = None
@@ -232,7 +234,7 @@ class AgentService:
                 content=response,
                 channel=conversation.channel,
                 external_user_id=conversation.external_user_id,
-                timestamp=datetime.utcnow(),
+                timestamp=utc_now(),
             )
             await self.dynamodb.create_message(agent_message)
 
@@ -268,7 +270,7 @@ class AgentService:
             "escalate": False,
             "rag_context_used": rag_context is not None,
             "agent_message_id": agent_message_id,
-            "agent_message_timestamp": agent_message.timestamp.isoformat() if conversation and agent_message_id else None,
+            "agent_message_timestamp": to_utc_iso_string(agent_message.timestamp) if conversation and agent_message_id else None,
         }
         return result
 

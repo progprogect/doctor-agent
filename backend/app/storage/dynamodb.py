@@ -16,6 +16,7 @@ from app.models.channel_binding import ChannelBinding
 from app.models.conversation import Conversation, ConversationStatus, MarketingStatus
 from app.models.instagram_user_profile import InstagramUserProfile
 from app.models.message import Message, MessageRole
+from app.utils.datetime_utils import parse_utc_datetime, to_utc_iso_string, utc_now
 from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
@@ -128,9 +129,9 @@ class DynamoDBClient:
         item = conversation.model_dump(exclude_none=True)
         # Convert datetime objects to ISO format strings for DynamoDB
         if "created_at" in item and isinstance(item["created_at"], datetime):
-            item["created_at"] = item["created_at"].isoformat()
+            item["created_at"] = to_utc_iso_string(item["created_at"])
         if "updated_at" in item and isinstance(item["updated_at"], datetime):
-            item["updated_at"] = item["updated_at"].isoformat()
+            item["updated_at"] = to_utc_iso_string(item["updated_at"])
         item["ttl"] = self._calculate_ttl(conversation.created_at)
         
         # Ensure marketing_status defaults to NEW if not set
@@ -193,7 +194,7 @@ class DynamoDBClient:
             return await self.get_conversation(conversation_id)
 
         update_expression_parts.append("updated_at = :updated_at")
-        expression_attribute_values[":updated_at"] = datetime.utcnow().isoformat()
+        expression_attribute_values[":updated_at"] = to_utc_iso_string(utc_now())
 
         try:
             update_kwargs = {
@@ -305,7 +306,7 @@ class DynamoDBClient:
         item = message.model_dump(exclude_none=True)
         # Convert datetime objects to ISO format strings for DynamoDB
         if "timestamp" in item and isinstance(item["timestamp"], datetime):
-            item["timestamp"] = item["timestamp"].isoformat()
+            item["timestamp"] = to_utc_iso_string(item["timestamp"])
         item["ttl"] = self._calculate_ttl(message.timestamp)
 
         self.tables["messages"].put_item(Item=item)
@@ -346,9 +347,8 @@ class DynamoDBClient:
         for item in items:
             if "timestamp" in item and isinstance(item["timestamp"], str):
                 try:
-                    # Парсим ISO строку в datetime
-                    ts_str = item["timestamp"].replace('Z', '+00:00')
-                    item["timestamp"] = datetime.fromisoformat(ts_str)
+                    # Парсим ISO строку в datetime как UTC
+                    item["timestamp"] = parse_utc_datetime(item["timestamp"])
                 except (ValueError, AttributeError) as e:
                     logger.warning(f"Failed to parse timestamp '{item.get('timestamp')}': {e}, keeping as string")
 
@@ -363,17 +363,16 @@ class DynamoDBClient:
                 return ts
             elif isinstance(ts, str):
                 try:
-                    # Обрабатываем ISO формат с 'Z' или без timezone
-                    ts_clean = ts.replace('Z', '+00:00')
-                    return datetime.fromisoformat(ts_clean)
+                    # Парсим ISO строку как UTC
+                    return parse_utc_datetime(ts)
                 except (ValueError, AttributeError):
                     # Fallback to current time if parsing fails
                     logger.warning(f"Failed to parse timestamp '{ts}', using current time")
-                    return datetime.utcnow()
+                    return utc_now()
             else:
                 # Fallback for any other type
                 logger.warning(f"Unexpected timestamp type: {type(ts)}, using current time")
-                return datetime.utcnow()
+                return utc_now()
         
         # Сортировка: старые → новые (хронологический порядок)
         result.sort(key=get_timestamp)
@@ -419,8 +418,8 @@ class DynamoDBClient:
         item = {
             "agent_id": agent_id,
             "config": config_converted,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "created_at": to_utc_iso_string(utc_now()),
+            "updated_at": to_utc_iso_string(utc_now()),
             "is_active": True,
         }
         self.tables["agents"].put_item(Item=item)
@@ -448,7 +447,7 @@ class DynamoDBClient:
                 },
                 ExpressionAttributeValues={
                     ":active": is_active,
-                    ":updated_at": datetime.utcnow().isoformat(),
+                    ":updated_at": to_utc_iso_string(utc_now()),
                 },
                 ReturnValues="ALL_NEW",
                 ConditionExpression="attribute_exists(agent_id)",
@@ -485,9 +484,9 @@ class DynamoDBClient:
         item = binding.model_dump(exclude_none=True)
         # Convert datetime objects to ISO format strings for DynamoDB
         if "created_at" in item and isinstance(item["created_at"], datetime):
-            item["created_at"] = item["created_at"].isoformat()
+            item["created_at"] = to_utc_iso_string(item["created_at"])
         if "updated_at" in item and isinstance(item["updated_at"], datetime):
-            item["updated_at"] = item["updated_at"].isoformat()
+            item["updated_at"] = to_utc_iso_string(item["updated_at"])
         # Convert enum to string
         if "channel_type" in item:
             item["channel_type"] = get_enum_value(item["channel_type"])
@@ -700,7 +699,7 @@ class DynamoDBClient:
             return await self.get_channel_binding(binding_id)
 
         update_expression_parts.append("updated_at = :updated_at")
-        expression_attribute_values[":updated_at"] = datetime.utcnow().isoformat()
+        expression_attribute_values[":updated_at"] = to_utc_iso_string(utc_now())
 
         try:
             update_kwargs = {
@@ -741,7 +740,7 @@ class DynamoDBClient:
             "action": action,
             "resource_type": resource_type,
             "resource_id": resource_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": to_utc_iso_string(utc_now()),
             "metadata": metadata or {},
         }
         self.tables["audit_logs"].put_item(Item=item)
@@ -859,11 +858,8 @@ class DynamoDBClient:
             ts_str = item.get("timestamp", "")
             if isinstance(ts_str, str):
                 try:
-                    parsed = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                    # Ensure timezone-aware
-                    if parsed.tzinfo is None:
-                        parsed = parsed.replace(tzinfo=timezone.utc)
-                    return parsed
+                    # Парсим ISO строку как UTC
+                    return parse_utc_datetime(ts_str)
                 except (ValueError, AttributeError):
                     return datetime.min.replace(tzinfo=timezone.utc)
             return datetime.min.replace(tzinfo=timezone.utc)
@@ -924,7 +920,7 @@ class DynamoDBClient:
         item = profile.model_dump(exclude_none=True)
         # Convert datetime objects to ISO format strings for DynamoDB
         if "updated_at" in item and isinstance(item["updated_at"], datetime):
-            item["updated_at"] = item["updated_at"].isoformat()
+            item["updated_at"] = to_utc_iso_string(item["updated_at"])
         # Ensure TTL is set
         if "ttl" not in item or not item["ttl"]:
             item["ttl"] = self._calculate_profile_ttl(profile.updated_at)
@@ -948,10 +944,10 @@ class DynamoDBClient:
             # Parse datetime from ISO string
             if "updated_at" in item and isinstance(item["updated_at"], str):
                 try:
-                    item["updated_at"] = datetime.fromisoformat(item["updated_at"].replace("Z", "+00:00"))
+                    item["updated_at"] = parse_utc_datetime(item["updated_at"])
                 except (ValueError, AttributeError) as e:
                     logger.warning(f"Failed to parse updated_at for profile {external_user_id}: {e}, using current time")
-                    item["updated_at"] = datetime.utcnow()
+                    item["updated_at"] = utc_now()
 
             return InstagramUserProfile(**item)
         except Exception as e:

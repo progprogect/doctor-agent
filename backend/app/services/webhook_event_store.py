@@ -3,6 +3,8 @@
 import json
 import logging
 from datetime import datetime
+
+from app.utils.datetime_utils import to_utc_iso_string, utc_now
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -74,11 +76,11 @@ def add_webhook_event(event_type: str, payload: Dict[str, Any]) -> None:
             break  # Only process first entry
     
     event = {
-        "id": f"webhook_{datetime.utcnow().timestamp()}",
+        "id": f"webhook_{utc_now().timestamp()}",
         "type": event_type,
         "payload": payload,
         "extracted": extracted_info,  # Add extracted info for easier access
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": to_utc_iso_string(utc_now()),
     }
     
     _recent_events.append(event)

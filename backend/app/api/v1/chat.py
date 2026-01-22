@@ -80,8 +80,8 @@ async def create_conversation(
         channel=MessageChannel.WEB_CHAT,  # Web chat is default channel
         status=ConversationStatus.AI_ACTIVE,
         marketing_status=MarketingStatus.NEW,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
 
     await deps.dynamodb.create_conversation(conversation)
@@ -157,7 +157,7 @@ async def send_message(
         content=request.content,
         channel=conversation.channel,
         external_user_id=conversation.external_user_id,
-        timestamp=datetime.utcnow(),
+        timestamp=utc_now(),
     )
 
     await deps.dynamodb.create_message(user_message)
@@ -173,7 +173,7 @@ async def send_message(
             message_id=message_id,
             role=role_value,
             content=user_message.content,
-            timestamp=user_message.timestamp.isoformat(),
+            timestamp=to_utc_iso_string(user_message.timestamp),
         )
 
     # Get agent configuration
@@ -250,7 +250,7 @@ async def send_message(
             message_id=message_id,
             role=role_value,
             content=request.content,
-            timestamp=user_message.timestamp.isoformat(),
+            timestamp=to_utc_iso_string(user_message.timestamp),
         )
 
     # Agent message is already created in agent_service.process_message
@@ -269,7 +269,7 @@ async def send_message(
             content=agent_response,
             channel=conversation.channel,
             external_user_id=conversation.external_user_id,
-            timestamp=datetime.utcnow(),
+            timestamp=utc_now(),
             metadata={"rag_context_used": result.get("rag_context_used", False)},
         )
         await deps.dynamodb.create_message(agent_message)
@@ -289,7 +289,7 @@ async def send_message(
         message_id=agent_message_id,
         role=role_value,
         content=agent_message.content,
-        timestamp=agent_message.timestamp.isoformat(),
+        timestamp=to_utc_iso_string(agent_message.timestamp),
     )
 
 

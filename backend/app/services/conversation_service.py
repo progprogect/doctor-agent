@@ -6,6 +6,7 @@ from app.models.conversation import Conversation, ConversationStatus
 from app.models.message import Message, MessageRole
 from app.services.agent_service import AgentService, create_agent_service
 from app.storage.dynamodb import DynamoDBClient
+from app.utils.datetime_utils import utc_now
 from app.utils.enum_helpers import get_enum_value
 
 
@@ -73,7 +74,6 @@ class ConversationService:
         metadata: Optional[dict] = None,
     ) -> Message:
         """Create and save agent response message."""
-        from datetime import datetime
         import uuid
 
         # Get conversation to get agent_id
@@ -91,7 +91,7 @@ class ConversationService:
             content=agent_response,
             channel=conversation.channel,
             external_user_id=conversation.external_user_id,
-            timestamp=datetime.utcnow(),
+            timestamp=utc_now(),
             metadata=metadata or {},
         )
 

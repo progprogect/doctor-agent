@@ -6,6 +6,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
+from app.utils.datetime_utils import to_utc_iso_string, utc_now
+
 
 class MessageRole(str, Enum):
     """Message role."""
@@ -39,7 +41,7 @@ class Message(BaseModel):
     external_user_id: Optional[str] = Field(
         None, description="External user ID (e.g., Instagram user ID)"
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Additional metadata"
     )
@@ -51,7 +53,7 @@ class Message(BaseModel):
         """Pydantic config."""
 
         use_enum_values = True
-        json_encoders = {datetime: lambda v: v.isoformat()}
+        json_encoders = {datetime: lambda v: to_utc_iso_string(v) if v else None}
 
 
 

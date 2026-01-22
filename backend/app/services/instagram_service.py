@@ -5,12 +5,13 @@ import hmac
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import httpx
 
 from app.config import Settings, get_settings
+from app.utils.datetime_utils import parse_utc_datetime, utc_now
 from app.models.channel_binding import ChannelType
 from app.models.conversation import Conversation, ConversationStatus, MarketingStatus
 from app.models.instagram_user_profile import InstagramUserProfile
@@ -214,18 +215,19 @@ class InstagramService:
                 # Instagram timestamp обычно в миллисекундах Unix epoch
                 timestamp_ms = event["timestamp"]
                 if isinstance(timestamp_ms, (int, float)):
-                    webhook_timestamp = datetime.utcfromtimestamp(int(timestamp_ms) / 1000)
+                    # Convert Unix timestamp (milliseconds) to UTC datetime
+                    webhook_timestamp = datetime.fromtimestamp(int(timestamp_ms) / 1000, tz=timezone.utc)
                     logger.info(f"Using timestamp from Instagram webhook: {webhook_timestamp} (from {timestamp_ms} ms)")
                 elif isinstance(timestamp_ms, str):
                     # Попытка парсинга строки
-                    webhook_timestamp = datetime.utcfromtimestamp(int(timestamp_ms) / 1000)
+                    webhook_timestamp = datetime.fromtimestamp(int(timestamp_ms) / 1000, tz=timezone.utc)
                     logger.info(f"Using timestamp from Instagram webhook (parsed from string): {webhook_timestamp}")
             except (ValueError, TypeError, KeyError) as e:
                 logger.warning(f"Failed to parse Instagram webhook timestamp: {e}, using current time")
                 webhook_timestamp = None
 
         # Используем timestamp из webhook, если доступен, иначе текущее время
-        message_timestamp = webhook_timestamp if webhook_timestamp else datetime.utcnow()
+        message_timestamp = webhook_timestamp if webhook_timestamp else utc_now()
 
         # Create user message
         user_message = Message(
@@ -361,8 +363,8 @@ class InstagramService:
             external_conversation_id=external_conversation_id,
             status=ConversationStatus.AI_ACTIVE,
             marketing_status=MarketingStatus.NEW,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utc_now(),
+            updated_at=utc_now(),
         )
 
         await self.dynamodb.create_conversation(conversation)
@@ -439,7 +441,7 @@ class InstagramService:
                         return None
                     
                     # Create profile object with proper TTL
-                    updated_at = datetime.utcnow()
+                    updated_at = utc_now()
                     profile = InstagramUserProfile(
                         external_user_id=igsid,
                         name=data.get("name"),

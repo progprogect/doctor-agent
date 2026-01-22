@@ -17,6 +17,7 @@ from app.models.message import Message, MessageChannel, MessageRole
 from app.services.agent_service import create_agent_service
 from app.services.conversation_service import ConversationService
 from app.storage.dynamodb import DynamoDBClient
+from app.utils.datetime_utils import to_utc_iso_string, utc_now
 from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)
@@ -258,7 +259,7 @@ async def _handle_message(
         role=MessageRole.USER,
         content=content,
         channel=conversation.channel,
-        timestamp=datetime.utcnow(),
+        timestamp=utc_now(),
     )
 
     await dynamodb.create_message(user_message)
@@ -271,7 +272,7 @@ async def _handle_message(
             "message_id": message_id,
             "role": "user",
             "content": content,
-            "timestamp": user_message.timestamp.isoformat(),
+            "timestamp": to_utc_iso_string(user_message.timestamp),
         },
     )
 
@@ -336,7 +337,7 @@ async def _handle_message(
         
         if agent_response and agent_message_id:
             # Use timestamp from result to avoid extra DB query
-            timestamp = agent_message_timestamp or datetime.utcnow().isoformat()
+            timestamp = agent_message_timestamp or to_utc_iso_string(utc_now())
             await connection_manager.send_message(
                 conversation_id,
                 {

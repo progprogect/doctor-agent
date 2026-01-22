@@ -11,6 +11,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from app.config import Settings, get_settings
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class DynamoDBCacheClient:
             if expires_at:
                 # Handle both int and Decimal types from DynamoDB
                 expires_timestamp = int(float(expires_at))
-                current_timestamp = int(datetime.utcnow().timestamp())
+                current_timestamp = int(utc_now().timestamp())
                 if current_timestamp >= expires_timestamp:
                     # Item has expired, delete it
                     await self.delete(key)
@@ -87,7 +88,7 @@ class DynamoDBCacheClient:
 
             # Calculate expires_at if TTL is provided
             if ttl:
-                expires_at = int((datetime.utcnow() + timedelta(seconds=ttl)).timestamp())
+                expires_at = int((utc_now() + timedelta(seconds=ttl)).timestamp())
                 item["expires_at"] = expires_at
 
             self.table.put_item(Item=item)
