@@ -806,10 +806,21 @@ class DynamoDBClient:
                     "limit": limit,
                 },
             )
-            # If table doesn't exist, return empty list
+            # Handle specific error cases
             if error_code == "ResourceNotFoundException":
                 logger.warning("Audit logs table does not exist, returning empty list")
                 return []
+            elif error_code == "AccessDeniedException":
+                logger.error("Access denied to audit logs table")
+                return []
+            elif error_code == "ValidationException":
+                logger.error(f"Validation error in audit logs scan: {error_message}")
+                # Try without filters if validation error
+                if filter_expression:
+                    # Will be handled in fallback below
+                    pass
+                else:
+                    return []
             # Fallback: try without filters if filter expression fails
             if filter_expression:
                 try:
