@@ -873,22 +873,33 @@ class DynamoDBClient:
             logger.warning(f"Items is not a list: {type(items)}, returning empty list")
             return []
         
-        # Normalize date filters to timezone-aware
-        if start_date and start_date.tzinfo is None:
-            start_date = start_date.replace(tzinfo=timezone.utc)
-        if end_date and end_date.tzinfo is None:
-            end_date = end_date.replace(tzinfo=timezone.utc)
+        # Normalize date filters to timezone-aware (defensive programming)
+        normalized_start_date = None
+        normalized_end_date = None
+        if start_date:
+            if start_date.tzinfo is None:
+                normalized_start_date = start_date.replace(tzinfo=timezone.utc)
+            else:
+                normalized_start_date = start_date
+        if end_date:
+            if end_date.tzinfo is None:
+                normalized_end_date = end_date.replace(tzinfo=timezone.utc)
+            else:
+                normalized_end_date = end_date
         
         # Apply date filters
-        if start_date or end_date:
+        if normalized_start_date or normalized_end_date:
             filtered_items = []
             for item in items:
                 if not isinstance(item, dict):
                     continue
                 item_timestamp = get_timestamp(item)
-                if start_date and item_timestamp < start_date:
+                # Ensure item_timestamp is timezone-aware
+                if item_timestamp.tzinfo is None:
+                    item_timestamp = item_timestamp.replace(tzinfo=timezone.utc)
+                if normalized_start_date and item_timestamp < normalized_start_date:
                     continue
-                if end_date and item_timestamp > end_date:
+                if normalized_end_date and item_timestamp > normalized_end_date:
                     continue
                 filtered_items.append(item)
             items = filtered_items
