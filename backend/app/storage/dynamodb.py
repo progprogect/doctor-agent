@@ -852,20 +852,32 @@ class DynamoDBClient:
             return []
         
         # Filter by date range client-side
+        from datetime import timezone
+        
         def get_timestamp(item: dict[str, Any]) -> datetime:
             """Extract timestamp from audit log item."""
             ts_str = item.get("timestamp", "")
             if isinstance(ts_str, str):
                 try:
-                    return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    parsed = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    # Ensure timezone-aware
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+                    return parsed
                 except (ValueError, AttributeError):
-                    return datetime.min
-            return datetime.min
+                    return datetime.min.replace(tzinfo=timezone.utc)
+            return datetime.min.replace(tzinfo=timezone.utc)
         
         # Ensure items is a list
         if not isinstance(items, list):
             logger.warning(f"Items is not a list: {type(items)}, returning empty list")
             return []
+        
+        # Normalize date filters to timezone-aware
+        if start_date and start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        if end_date and end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
         
         # Apply date filters
         if start_date or end_date:
