@@ -142,9 +142,13 @@ Return a structured response with:
         if cache_key not in self._chains:
             client = await self.llm_factory.get_client(agent_id)
             settings = get_settings()
+            
+            # Use model from agent config if available, otherwise fallback to global settings
+            model = config.llm.model if config and config.llm else settings.openai_model
+            
             llm = ChatOpenAI(
-                model=settings.openai_model,
-                temperature=0.1,  # Low temperature for deterministic classification
+                model=model,
+                temperature=0.5,  # Higher temperature for more flexible interpretation
                 openai_api_key=client.api_key,
                 timeout=settings.openai_timeout,
             )
