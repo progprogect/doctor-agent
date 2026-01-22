@@ -6,7 +6,6 @@ import { useEffect, useState, useCallback } from "react";
 import { api, ApiError } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { StatCardGroup } from "@/components/admin/StatCardGroup";
-import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
 import { PeriodComparison } from "@/components/admin/PeriodComparison";
 import { Select } from "@/components/shared/Select";
 import type { Stats, Period } from "@/lib/types/stats";
@@ -60,17 +59,6 @@ export default function StatsPage() {
       </div>
     );
   }
-
-  // Generate chart data (mock data for last 7 days)
-  // In a real implementation, this would come from the API
-  const chartData = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - i));
-    return {
-      date: date.toISOString(),
-      value: Math.floor(Math.random() * 50) + 10, // Mock data
-    };
-  });
 
   return (
     <div>
@@ -208,15 +196,6 @@ export default function StatsPage() {
         ]}
         columns={4}
       />
-
-      {period === "last_7_days" && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Conversations Over Time (Last 7 Days)
-          </h2>
-          <SimpleLineChart data={chartData} />
-        </div>
-      )}
     </div>
   );
 }
