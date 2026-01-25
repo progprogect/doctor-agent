@@ -37,7 +37,18 @@ export function ChannelBindingModal({
     setIsSubmitting(true);
 
     try {
-      await api.createChannelBinding(agentId, formData);
+      const binding = await api.createChannelBinding(agentId, formData);
+      
+      // For Telegram, automatically verify binding (which will set webhook)
+      if (channelType === "telegram" && binding.binding_id) {
+        try {
+          await api.verifyChannelBinding(binding.binding_id);
+        } catch (verifyErr) {
+          // Log but don't fail - verification can be done manually later
+          console.warn("Failed to auto-verify Telegram binding:", verifyErr);
+        }
+      }
+      
       onSuccess();
     } catch (err) {
       if (err instanceof ApiError) {
