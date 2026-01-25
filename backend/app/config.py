@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     dynamodb_table_instagram_profiles: str = Field(
         default="doctor-agent-instagram-profiles", description="Instagram user profiles table name"
     )
+    dynamodb_table_notification_configs: str = Field(
+        default="doctor-agent-notification-configs", description="Notification configs table name"
+    )
     dynamodb_endpoint_url: Optional[str] = Field(
         default=None, description="DynamoDB endpoint URL (for local development)"
     )

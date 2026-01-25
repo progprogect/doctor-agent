@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 const navigation = [
   { name: "Agents", href: "/admin/agents", icon: "🤖" },
   { name: "Conversations", href: "/admin/conversations", icon: "💬" },
+  { name: "Notifications", href: "/admin/notifications", icon: "🔔" },
   { name: "Audit", href: "/admin/audit", icon: "📋" },
   { name: "Stats", href: "/admin/stats", icon: "📊" },
   { name: "Instagram Test", href: "/admin/instagram-test", icon: "🧪" },

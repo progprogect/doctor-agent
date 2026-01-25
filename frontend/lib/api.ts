@@ -16,6 +16,11 @@ import type {
   CreateChannelBindingRequest,
   UpdateChannelBindingRequest,
 } from "./types/channel";
+import type {
+  NotificationConfig,
+  CreateNotificationConfigRequest,
+  UpdateNotificationConfigRequest,
+} from "./types/notification";
 
 // Use relative URLs when running on same domain (via ALB)
 // This automatically uses the same protocol (HTTP/HTTPS) as the page
@@ -474,6 +479,81 @@ export const api = {
       status: string;
     }>(
       `/api/v1/channel-bindings/${bindingId}/verify`,
+      {
+        method: "POST",
+      },
+      true // require auth
+    );
+  },
+
+  // Notification configs endpoints
+  async listNotificationConfigs(
+    activeOnly: boolean = false
+  ): Promise<NotificationConfig[]> {
+    const queryParams = new URLSearchParams();
+    queryParams.append("active_only", activeOnly.toString());
+
+    return request<NotificationConfig[]>(
+      `/api/v1/admin/notifications?${queryParams.toString()}`,
+      {},
+      true // require auth
+    );
+  },
+
+  async createNotificationConfig(
+    data: CreateNotificationConfigRequest
+  ): Promise<NotificationConfig> {
+    return request<NotificationConfig>(
+      `/api/v1/admin/notifications`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      true // require auth
+    );
+  },
+
+  async getNotificationConfig(configId: string): Promise<NotificationConfig> {
+    return request<NotificationConfig>(
+      `/api/v1/admin/notifications/${configId}`,
+      {},
+      true // require auth
+    );
+  },
+
+  async updateNotificationConfig(
+    configId: string,
+    data: UpdateNotificationConfigRequest
+  ): Promise<NotificationConfig> {
+    return request<NotificationConfig>(
+      `/api/v1/admin/notifications/${configId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
+      },
+      true // require auth
+    );
+  },
+
+  async deleteNotificationConfig(configId: string): Promise<void> {
+    await request<void>(
+      `/api/v1/admin/notifications/${configId}`,
+      {
+        method: "DELETE",
+      },
+      true // require auth
+    );
+  },
+
+  async testNotification(configId: string): Promise<{
+    status: string;
+    message: string;
+  }> {
+    return request<{
+      status: string;
+      message: string;
+    }>(
+      `/api/v1/admin/notifications/${configId}/test`,
       {
         method: "POST",
       },

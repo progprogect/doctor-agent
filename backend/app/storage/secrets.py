@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime
 from functools import lru_cache
 from typing import Optional
 
@@ -240,6 +241,72 @@ class SecretsManager:
             if error_code == "ResourceNotFoundException":
                 raise ValueError(f"Secret {secret_name} not found") from e
             raise RuntimeError(f"Failed to retrieve channel token from {secret_name}: {e}") from e
+
+    async def create_notification_token_secret(
+        self,
+        config_id: str,
+        bot_token: str,
+    ) -> str:
+        """Create secret for notification bot token."""
+        secret_name = f"doctor-agent/notifications/{config_id}/bot-token"
+        secret_value = json.dumps(
+            {
+                "bot_token": bot_token,
+                "created_at": datetime.now().isoformat(),
+            }
+        )
+
+        try:
+            self.client.create_secret(
+                Name=secret_name,
+                SecretString=secret_value,
+                Description=f"Bot token for notification config {config_id}",
+            )
+            # Clear cache for this secret (in case it was cached before)
+            self.clear_cache(secret_name)
+            logger.info(f"Created notification token secret: {secret_name}")
+            return secret_name
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceExistsException":
+                # Secret already exists, update it instead
+                logger.warning(
+                    f"Secret {secret_name} already exists, updating..."
+                )
+                self.client.update_secret(
+                    SecretId=secret_name,
+                    SecretString=secret_value,
+                )
+                # Clear cache for this secret after update
+                self.clear_cache(secret_name)
+                return secret_name
+            raise RuntimeError(
+                f"Failed to create notification token secret: {e}"
+            ) from e
+
+    async def get_notification_bot_token(self, secret_name: str) -> str:
+        """Get notification bot token from secret.
+
+        Notification tokens are stored as JSON: {"bot_token": "...", "created_at": "..."}
+        This method uses get_secret() with json_key="bot_token" for consistency.
+        """
+        try:
+            # Use get_secret with json_key parameter for consistent JSON extraction
+            return await self.get_secret(
+                secret_name, use_cache=False, json_key="bot_token"
+            )
+        except ValueError as e:
+            logger.error(
+                f"Failed to get notification bot token from {secret_name}: {e}"
+            )
+            raise
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                raise ValueError(f"Secret {secret_name} not found") from e
+            raise RuntimeError(
+                f"Failed to retrieve notification bot token from {secret_name}: {e}"
+            ) from e
 
     async def update_channel_token(
         self,

@@ -341,6 +341,36 @@ class TelegramService:
             logger.error(f"Error verifying Telegram bot token: {e}", exc_info=True)
             return False
 
+    async def send_notification_message(
+        self, bot_token: str, chat_id: str, message_text: str
+    ) -> dict[str, Any]:
+        """Send notification message via Telegram Bot API (direct, without ChannelBinding)."""
+        url = f"{self.TELEGRAM_API_BASE_URL}{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message_text,
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=payload)
+
+            if response.status_code != 200:
+                error_text = response.text
+                logger.error(
+                    f"Failed to send Telegram notification: {response.status_code} - {error_text}"
+                )
+                response.raise_for_status()
+
+            result = response.json()
+
+            if not result.get("ok"):
+                error_description = result.get("description", "Unknown error")
+                logger.error(f"Telegram API error: {error_description}")
+                raise ValueError(f"Telegram API error: {error_description}")
+
+            logger.info(f"Sent Telegram notification to chat {chat_id}")
+            return result
+
     async def set_webhook(
         self, binding_id: str, webhook_url: str, secret_token: Optional[str] = None
     ) -> bool:

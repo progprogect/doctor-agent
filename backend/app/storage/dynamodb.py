@@ -1,5 +1,6 @@
 """DynamoDB client wrapper."""
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timedelta
@@ -42,6 +43,7 @@ class DynamoDBClient:
             "audit_logs": self.dynamodb.Table(settings.dynamodb_table_audit_logs),
             "channel_bindings": self.dynamodb.Table(settings.dynamodb_table_channel_bindings),
             "instagram_profiles": self.dynamodb.Table(settings.dynamodb_table_instagram_profiles),
+            "notification_configs": self.dynamodb.Table(settings.dynamodb_table_notification_configs),
         }
         self.message_ttl_seconds = settings.message_ttl_hours * 3600
         
@@ -229,6 +231,57 @@ class DynamoDBClient:
                         await broadcast_manager.broadcast_new_escalation(
                             updated_conversation, handoff_reason
                         )
+                        
+                        # Send Telegram notifications (async, non-blocking)
+                        try:
+                            from app.services.notification_service import NotificationService
+                            from app.services.telegram_service import TelegramService
+                            from app.storage.secrets import get_secrets_manager
+                            from app.config import get_settings
+                            
+                            # Get agent display name for notification
+                            agent_data = await self.get_agent(updated_conversation.agent_id)
+                            agent_display_name = "Unknown Agent"
+                            if agent_data and "config" in agent_data:
+                                from app.models.agent_config import AgentConfig
+                                agent_config = AgentConfig.from_dict(agent_data["config"])
+                                agent_display_name = agent_config.profile.doctor_display_name
+                            
+                            # Create notification service
+                            # Note: TelegramService requires channel_binding_service for some methods,
+                            # but send_notification_message doesn't need it, so we can pass a dummy
+                            # For notifications, we only use send_notification_message which doesn't use channel_binding_service
+                            secrets_manager = get_secrets_manager()
+                            settings = get_settings()
+                            from app.services.channel_binding_service import ChannelBindingService
+                            # Create a minimal ChannelBindingService instance (won't be used for notifications)
+                            channel_binding_service = ChannelBindingService(self, secrets_manager)
+                            telegram_service = TelegramService(
+                                channel_binding_service=channel_binding_service,
+                                dynamodb=self,
+                                settings=settings
+                            )
+                            notification_service = NotificationService(
+                                dynamodb=self,
+                                secrets_manager=secrets_manager,
+                                telegram_service=telegram_service
+                            )
+                            
+                            # Send notifications (async, non-blocking)
+                            # Use asyncio.create_task to not block the main flow
+                            asyncio.create_task(
+                                notification_service.send_escalation_notification(
+                                    conversation=updated_conversation,
+                                    escalation_reason=handoff_reason or "Escalation required",
+                                    agent_display_name=agent_display_name
+                                )
+                            )
+                        except Exception as e:
+                            # Don't fail the update if notification fails
+                            logger.warning(
+                                f"Failed to send escalation notifications: {e}",
+                                exc_info=True
+                            )
                     else:
                         # Regular status update
                         await broadcast_manager.broadcast_conversation_update(
@@ -722,6 +775,134 @@ class DynamoDBClient:
     async def delete_channel_binding(self, binding_id: str) -> None:
         """Delete channel binding."""
         self.tables["channel_bindings"].delete_item(Key={"binding_id": binding_id})
+
+    # Notification config operations
+    async def create_notification_config(
+        self, config: "NotificationConfig"
+    ) -> "NotificationConfig":
+        """Create a new notification config."""
+        from app.models.notification_config import NotificationConfig
+
+        item = config.model_dump(exclude_none=True)
+        # Convert datetime objects to ISO format strings for DynamoDB
+        if "created_at" in item and isinstance(item["created_at"], datetime):
+            item["created_at"] = to_utc_iso_string(item["created_at"])
+        if "updated_at" in item and isinstance(item["updated_at"], datetime):
+            item["updated_at"] = to_utc_iso_string(item["updated_at"])
+        # Convert enum to string
+        if "notification_type" in item:
+            item["notification_type"] = get_enum_value(item["notification_type"])
+
+        self.tables["notification_configs"].put_item(Item=item)
+        return config
+
+    async def get_notification_config(
+        self, config_id: str
+    ) -> Optional["NotificationConfig"]:
+        """Get notification config by ID."""
+        from app.models.notification_config import NotificationConfig
+
+        response = self.tables["notification_configs"].get_item(
+            Key={"config_id": config_id}
+        )
+        item = response.get("Item")
+        if not item:
+            return None
+        return NotificationConfig(**item)
+
+    async def list_notification_configs(
+        self, active_only: bool = False
+    ) -> list["NotificationConfig"]:
+        """List all notification configs."""
+        from app.models.notification_config import NotificationConfig
+
+        try:
+            if active_only:
+                filter_expr, attr_values, attr_names = self._build_filter_expression(
+                    [("is_active", "=", ":active")],
+                    {":active": True},
+                )
+                scan_kwargs = {
+                    "FilterExpression": filter_expr,
+                    "ExpressionAttributeValues": attr_values,
+                }
+                if attr_names:
+                    scan_kwargs["ExpressionAttributeNames"] = attr_names
+                response = self.tables["notification_configs"].scan(**scan_kwargs)
+            else:
+                response = self.tables["notification_configs"].scan()
+
+            items = response.get("Items", [])
+            configs = []
+            for item in items:
+                try:
+                    config = NotificationConfig(**item)
+                    configs.append(config)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to create NotificationConfig from DynamoDB item: {e}",
+                        extra={
+                            "config_id": item.get("config_id"),
+                            "error_type": type(e).__name__,
+                        },
+                        exc_info=True,
+                    )
+                    continue
+            return configs
+        except ClientError as e:
+            logger.error(f"Failed to list notification configs: {e}", exc_info=True)
+            return []
+
+    async def update_notification_config(
+        self, config_id: str, **kwargs: Any
+    ) -> Optional["NotificationConfig"]:
+        """Update notification config."""
+        from app.models.notification_config import NotificationConfig
+
+        update_expression_parts = []
+        expression_attribute_values = {}
+        expression_attribute_names = {}
+
+        for key, value in kwargs.items():
+            if key == "notification_type":
+                value = get_enum_value(value)
+
+            # Check if key is a reserved keyword and use ExpressionAttributeNames
+            if key in self._reserved_keywords:
+                attr_placeholder = f"#{key}"
+                expression_attribute_names[attr_placeholder] = key
+                update_expression_parts.append(f"{attr_placeholder} = :{key}")
+            else:
+                update_expression_parts.append(f"{key} = :{key}")
+
+            expression_attribute_values[f":{key}"] = value
+
+        if not update_expression_parts:
+            return await self.get_notification_config(config_id)
+
+        update_expression_parts.append("updated_at = :updated_at")
+        expression_attribute_values[":updated_at"] = to_utc_iso_string(utc_now())
+
+        try:
+            update_kwargs = {
+                "Key": {"config_id": config_id},
+                "UpdateExpression": f"SET {', '.join(update_expression_parts)}",
+                "ExpressionAttributeValues": expression_attribute_values,
+                "ReturnValues": "ALL_NEW",
+            }
+            # Only include ExpressionAttributeNames if it's not empty
+            if expression_attribute_names:
+                update_kwargs["ExpressionAttributeNames"] = expression_attribute_names
+
+            self.tables["notification_configs"].update_item(**update_kwargs)
+            return await self.get_notification_config(config_id)
+        except ClientError as e:
+            logger.error(f"Failed to update notification config: {e}", exc_info=True)
+            return None
+
+    async def delete_notification_config(self, config_id: str) -> None:
+        """Delete notification config."""
+        self.tables["notification_configs"].delete_item(Key={"config_id": config_id})
 
     # Audit log operations
     async def create_audit_log(
