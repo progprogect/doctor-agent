@@ -105,9 +105,7 @@ async def set_webhook(
     from app.storage.secrets import get_secrets_manager
 
     secrets_manager = get_secrets_manager()
-    binding_service = ChannelBindingService(
-        telegram_service.dynamodb, secrets_manager
-    )
+    binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
     binding = await binding_service.get_binding(binding_id)
 
     if not binding:
@@ -167,9 +165,7 @@ async def get_webhook_status(
     from app.storage.secrets import get_secrets_manager
 
     secrets_manager = get_secrets_manager()
-    binding_service = ChannelBindingService(
-        telegram_service.dynamodb, secrets_manager
-    )
+    binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
     binding = await binding_service.get_binding(binding_id)
 
     if not binding:
