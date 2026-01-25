@@ -204,7 +204,7 @@ class ChannelBindingService:
                 await self.update_binding(binding_id, is_verified=False)
                 return False
 
-        # For Telegram, verify by calling getMe API
+        # For Telegram, verify by calling getMe API and set webhook automatically
         elif binding.channel_type == ChannelType.TELEGRAM:
             try:
                 # Import here to avoid circular dependency
@@ -217,6 +217,32 @@ class ChannelBindingService:
                 
                 is_valid = await telegram_service.verify_bot_token(bot_token)
                 await self.update_binding(binding_id, is_verified=is_valid)
+                
+                # If token is valid, automatically set webhook
+                if is_valid:
+                    try:
+                        # Construct webhook URL
+                        # Use production domain for webhook URL
+                        webhook_url = f"https://agents.elemental.ae/api/v1/telegram/webhook/{binding_id}"
+                        
+                        webhook_set = await telegram_service.set_webhook(binding_id, webhook_url)
+                        if webhook_set:
+                            logger.info(
+                                f"Telegram webhook automatically set for binding {binding_id}: {webhook_url}"
+                            )
+                        else:
+                            logger.warning(
+                                f"Failed to automatically set Telegram webhook for binding {binding_id}. "
+                                f"Webhook can be set manually via API endpoint."
+                            )
+                            # Don't fail verification if webhook setup fails - it can be set manually later
+                    except Exception as webhook_error:
+                        logger.error(
+                            f"Error setting Telegram webhook for binding {binding_id}: {webhook_error}",
+                            exc_info=True,
+                        )
+                        # Don't fail verification if webhook setup fails - it can be set manually later
+                
                 return is_valid
             except Exception as e:
                 logger.error(f"Failed to verify Telegram binding {binding_id}: {e}")
