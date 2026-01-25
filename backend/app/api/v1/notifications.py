@@ -275,17 +275,11 @@ async def update_notification_config(
                 )
 
         # Update token in Secrets Manager
-        secret_value = json.dumps(
-            {
-                "bot_token": request.bot_token,
-                "created_at": to_utc_iso_string(config.created_at),
-            }
+        await secrets_manager.update_notification_token_secret(
+            secret_name=config.bot_token_secret_name,
+            bot_token=request.bot_token,
+            created_at=to_utc_iso_string(config.created_at),
         )
-        await secrets_manager.client.update_secret(
-            SecretId=config.bot_token_secret_name,
-            SecretString=secret_value,
-        )
-        secrets_manager.clear_cache(config.bot_token_secret_name)
 
     if update_kwargs:
         updated_config = await deps.dynamodb.update_notification_config(

@@ -308,6 +308,30 @@ class SecretsManager:
                 f"Failed to retrieve notification bot token from {secret_name}: {e}"
             ) from e
 
+    async def update_notification_token_secret(
+        self,
+        secret_name: str,
+        bot_token: str,
+        created_at: Optional[str] = None,
+    ) -> None:
+        """Update notification bot token in secret."""
+        secret_value = json.dumps(
+            {
+                "bot_token": bot_token,
+                **({"created_at": created_at} if created_at else {}),
+            }
+        )
+        try:
+            self.client.update_secret(
+                SecretId=secret_name,
+                SecretString=secret_value,
+            )
+            # Clear cache for this secret
+            self.clear_cache(secret_name)
+            logger.info(f"Updated notification token secret: {secret_name}")
+        except ClientError as e:
+            raise RuntimeError(f"Failed to update notification token secret: {e}") from e
+
     async def update_channel_token(
         self,
         secret_name: str,

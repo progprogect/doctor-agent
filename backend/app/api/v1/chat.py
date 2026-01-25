@@ -26,6 +26,7 @@ from app.services.telegram_service import TelegramService
 from app.config import get_settings
 from app.storage.secrets import get_secrets_manager
 from app.utils.enum_helpers import get_enum_value
+from app.utils.datetime_utils import utc_now
 
 router = APIRouter()
 
