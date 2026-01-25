@@ -27,7 +27,7 @@ export function ChannelBindingsList({
             No channel bindings yet
           </h2>
           <p className="text-gray-600">
-            Connect an Instagram account to start receiving messages.
+            Connect a channel (Instagram or Telegram) to start receiving messages.
           </p>
         </div>
       </div>
@@ -66,7 +66,11 @@ export function ChannelBindingsList({
               className="hover:bg-[#F5D76E]/5 transition-colors duration-150"
             >
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {binding.channel_type === "instagram" ? "Instagram" : binding.channel_type}
+                {binding.channel_type === "instagram"
+                  ? "Instagram"
+                  : binding.channel_type === "telegram"
+                  ? "Telegram"
+                  : binding.channel_type}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {binding.channel_account_id}

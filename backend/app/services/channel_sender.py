@@ -9,6 +9,7 @@ from app.storage.dynamodb import DynamoDBClient
 
 if TYPE_CHECKING:
     from app.services.instagram_service import InstagramService
+    from app.services.telegram_service import TelegramService
 
 logger = logging.getLogger(__name__)
 
@@ -115,10 +116,81 @@ class InstagramSender(ChannelSender):
         # before calling ChannelSender.send_message, so we don't save it again here
 
 
+class TelegramSender(ChannelSender):
+    """Sender for Telegram channel."""
+
+    def __init__(
+        self,
+        telegram_service: "TelegramService",
+        dynamodb: DynamoDBClient,
+    ):
+        """Initialize Telegram sender."""
+        self.telegram_service = telegram_service
+        self.dynamodb = dynamodb
+
+    async def send_message(
+        self,
+        conversation_id: str,
+        message_text: str,
+        binding_id: Optional[str] = None,
+        external_user_id: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        """Send message via Telegram Bot API."""
+        if not binding_id or not external_user_id:
+            # Try to get from conversation
+            conversation = await self.dynamodb.get_conversation(conversation_id)
+            if not conversation:
+                raise ValueError(f"Conversation {conversation_id} not found")
+
+            # Handle both enum and string channel (from DynamoDB)
+            from app.utils.enum_helpers import get_enum_value
+            conversation_channel = get_enum_value(conversation.channel)
+            if conversation_channel != MessageChannel.TELEGRAM.value:
+                raise ValueError(
+                    f"Conversation {conversation_id} is not a Telegram conversation"
+                )
+
+            # Find binding by agent_id
+            from app.services.channel_binding_service import ChannelBindingService
+            from app.storage.secrets import get_secrets_manager
+
+            secrets_manager = get_secrets_manager()
+            binding_service = ChannelBindingService(self.dynamodb, secrets_manager)
+
+            bindings = await binding_service.get_bindings_by_agent(
+                agent_id=conversation.agent_id,
+                channel_type=MessageChannel.TELEGRAM.value,
+                active_only=True,
+            )
+
+            if not bindings:
+                raise ValueError(
+                    f"No active Telegram binding found for agent {conversation.agent_id}"
+                )
+
+            binding_id = bindings[0].binding_id
+            external_user_id = conversation.external_user_id
+
+        if not external_user_id:
+            raise ValueError("external_user_id (chat_id) is required for Telegram messages")
+
+        # Send message via Telegram service
+        await self.telegram_service.send_message(
+            binding_id=binding_id,
+            chat_id=external_user_id,
+            message_text=message_text,
+        )
+
+        # Note: Agent message is already saved in AgentService.process_message
+        # before calling ChannelSender.send_message, so we don't save it again here
+
+
 def get_channel_sender(
     channel: MessageChannel,
     dynamodb: DynamoDBClient,
     instagram_service: Optional["InstagramService"] = None,
+    telegram_service: Optional["TelegramService"] = None,
 ) -> ChannelSender:
     """Get appropriate channel sender for the given channel."""
     if channel == MessageChannel.WEB_CHAT:
@@ -127,6 +199,10 @@ def get_channel_sender(
         if not instagram_service:
             raise ValueError("InstagramService is required for Instagram channel")
         return InstagramSender(instagram_service, dynamodb)
+    elif channel == MessageChannel.TELEGRAM:
+        if not telegram_service:
+            raise ValueError("TelegramService is required for Telegram channel")
+        return TelegramSender(telegram_service, dynamodb)
     else:
         raise ValueError(f"Unsupported channel: {channel}")
 

@@ -1,6 +1,6 @@
 /** Types for channel bindings. */
 
-export type ChannelType = "web_chat" | "instagram";
+export type ChannelType = "web_chat" | "instagram" | "telegram";
 
 export interface ChannelBinding {
   binding_id: string;

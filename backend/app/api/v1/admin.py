@@ -20,6 +20,7 @@ from app.models.message import Message, MessageChannel, MessageRole
 from app.services.channel_binding_service import ChannelBindingService
 from app.services.channel_sender import get_channel_sender
 from app.services.instagram_service import InstagramService
+from app.services.telegram_service import TelegramService
 from app.storage.secrets import get_secrets_manager
 from app.utils.datetime_utils import to_utc_iso_string
 from app.utils.enum_helpers import get_enum_value
@@ -423,6 +424,42 @@ async def send_admin_message(
                 # Instagram API error - log but don't fail (message already saved)
                 logger.error(
                     f"Failed to send message via Instagram API: {instagram_error}",
+                    exc_info=True,
+                )
+                # Message is already saved in DB, so we continue
+        elif conversation_channel == MessageChannel.TELEGRAM.value:
+            # Send via Telegram API for Telegram conversations
+            try:
+                # Create Telegram service and sender
+                settings = get_settings()
+                secrets_manager = get_secrets_manager()
+                binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
+                telegram_service = TelegramService(binding_service, deps.dynamodb, settings)
+                
+                # Convert string back to enum for get_channel_sender
+                channel_enum = MessageChannel(conversation_channel) if isinstance(conversation_channel, str) else conversation.channel
+                telegram_sender = get_channel_sender(
+                    channel_enum, deps.dynamodb, telegram_service=telegram_service
+                )
+                
+                # Send message via Telegram API
+                await telegram_sender.send_message(
+                    conversation_id=conversation_id,
+                    message_text=request.content,
+                )
+                
+                logger.info(f"Sent admin message to Telegram conversation {conversation_id}")
+            except ValueError as e:
+                # No binding or missing external_user_id - return clear error
+                logger.error(f"Failed to send Telegram message: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot send message to Telegram conversation: {str(e)}",
+                )
+            except Exception as telegram_error:
+                # Telegram API error - log but don't fail (message already saved)
+                logger.error(
+                    f"Failed to send message via Telegram API: {telegram_error}",
                     exc_info=True,
                 )
                 # Message is already saved in DB, so we continue

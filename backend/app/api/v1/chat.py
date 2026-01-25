@@ -22,6 +22,7 @@ from app.services.agent_service import create_agent_service
 from app.services.channel_sender import get_channel_sender
 from app.services.channel_binding_service import ChannelBindingService
 from app.services.instagram_service import InstagramService
+from app.services.telegram_service import TelegramService
 from app.config import get_settings
 from app.storage.secrets import get_secrets_manager
 from app.utils.enum_helpers import get_enum_value
@@ -219,17 +220,22 @@ async def send_message(
     conversation_channel = get_enum_value(conversation.channel)
     
     instagram_service = None
+    telegram_service = None
     if conversation_channel != MessageChannel.WEB_CHAT.value:
-        # Create Instagram service if needed
+        # Create channel-specific service if needed
         settings = get_settings()
         secrets_manager = get_secrets_manager()
         binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
-        instagram_service = InstagramService(binding_service, deps.dynamodb, settings)
+        
+        if conversation_channel == MessageChannel.INSTAGRAM.value:
+            instagram_service = InstagramService(binding_service, deps.dynamodb, settings)
+        elif conversation_channel == MessageChannel.TELEGRAM.value:
+            telegram_service = TelegramService(binding_service, deps.dynamodb, settings)
     
     # Convert string back to enum for get_channel_sender
     channel_enum = MessageChannel(conversation_channel) if isinstance(conversation_channel, str) else conversation.channel
     channel_sender = get_channel_sender(
-        channel_enum, deps.dynamodb, instagram_service
+        channel_enum, deps.dynamodb, instagram_service, telegram_service
     )
 
     # Process message through agent service

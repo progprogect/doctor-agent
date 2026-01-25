@@ -204,6 +204,25 @@ class ChannelBindingService:
                 await self.update_binding(binding_id, is_verified=False)
                 return False
 
+        # For Telegram, verify by calling getMe API
+        elif binding.channel_type == ChannelType.TELEGRAM:
+            try:
+                # Import here to avoid circular dependency
+                from app.config import get_settings
+                from app.services.telegram_service import TelegramService
+
+                settings = get_settings()
+                telegram_service = TelegramService(self, self.dynamodb, settings)
+                bot_token = await self.get_access_token(binding_id)
+                
+                is_valid = await telegram_service.verify_bot_token(bot_token)
+                await self.update_binding(binding_id, is_verified=is_valid)
+                return is_valid
+            except Exception as e:
+                logger.error(f"Failed to verify Telegram binding {binding_id}: {e}")
+                await self.update_binding(binding_id, is_verified=False)
+                return False
+
         # For other channels, return True if binding exists and is active
         return binding.is_active
 

@@ -8,6 +8,7 @@
 export function getChannelDisplay(channel?: string | null): string {
   if (!channel) return "-";
   if (channel === "instagram") return "📷 Instagram";
+  if (channel === "telegram") return "💬 Telegram";
   if (channel === "web_chat") return "🌐 Web Chat";
   return channel;
 }
@@ -28,4 +29,13 @@ export function isInstagramChannel(channel?: string | null): boolean {
  */
 export function isWebChatChannel(channel?: string | null): boolean {
   return channel === "web_chat";
+}
+
+/**
+ * Check if a conversation is a Telegram conversation.
+ * @param channel - Channel identifier
+ * @returns True if channel is Telegram
+ */
+export function isTelegramChannel(channel?: string | null): boolean {
+  return channel === "telegram";
 }

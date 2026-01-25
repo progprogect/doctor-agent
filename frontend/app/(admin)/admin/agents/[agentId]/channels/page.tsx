@@ -136,6 +136,12 @@ export default function AgentChannelsPage() {
           >
             Connect Instagram
           </Button>
+          <Button
+            variant="primary"
+            onClick={() => handleCreateBinding("telegram" as ChannelType)}
+          >
+            Connect Telegram
+          </Button>
         </div>
       </div>
 
