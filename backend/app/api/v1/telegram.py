@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from app.api.auth import require_admin
 from app.dependencies import CommonDependencies
 from app.services.channel_binding_service import ChannelBindingService
 from app.services.telegram_service import TelegramService
