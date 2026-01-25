@@ -811,13 +811,23 @@ class DynamoDBClient:
         """Get notification config by ID."""
         from app.models.notification_config import NotificationConfig
 
-        response = self.tables["notification_configs"].get_item(
-            Key={"config_id": config_id}
-        )
-        item = response.get("Item")
-        if not item:
+        try:
+            response = self.tables["notification_configs"].get_item(
+                Key={"config_id": config_id}
+            )
+            item = response.get("Item")
+            if not item:
+                return None
+            return NotificationConfig(**item)
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                logger.debug("Notification configs table does not exist yet")
+                return None
+            logger.warning(
+                f"Failed to get notification config {config_id}: {error_code} - {e.response.get('Error', {}).get('Message', str(e))}"
+            )
             return None
-        return NotificationConfig(**item)
 
     async def list_notification_configs(
         self, active_only: bool = False
@@ -859,7 +869,16 @@ class DynamoDBClient:
                     continue
             return configs
         except ClientError as e:
-            logger.error(f"Failed to list notification configs: {e}", exc_info=True)
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                # Table doesn't exist yet, return empty list
+                logger.debug("Notification configs table does not exist yet, returning empty list")
+                return []
+            # For other errors, log warning and return empty list to not break the main flow
+            logger.warning(
+                f"Failed to list notification configs: {error_code} - {e.response.get('Error', {}).get('Message', str(e))}",
+                exc_info=True
+            )
             return []
 
     async def update_notification_config(
@@ -911,7 +930,17 @@ class DynamoDBClient:
 
     async def delete_notification_config(self, config_id: str) -> None:
         """Delete notification config."""
-        self.tables["notification_configs"].delete_item(Key={"config_id": config_id})
+        try:
+            self.tables["notification_configs"].delete_item(Key={"config_id": config_id})
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                logger.debug("Notification configs table does not exist yet, skipping deletion")
+                return
+            logger.warning(
+                f"Failed to delete notification config {config_id}: {error_code} - {e.response.get('Error', {}).get('Message', str(e))}"
+            )
+            # Don't raise exception, just log warning
 
     # Audit log operations
     async def create_audit_log(
