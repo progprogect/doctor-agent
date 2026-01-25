@@ -234,48 +234,57 @@ class DynamoDBClient:
                         
                         # Send Telegram notifications (async, non-blocking)
                         try:
-                            from app.services.notification_service import NotificationService
-                            from app.services.telegram_service import TelegramService
-                            from app.storage.secrets import get_secrets_manager
-                            from app.config import get_settings
-                            
-                            # Get agent display name for notification
-                            agent_data = await self.get_agent(updated_conversation.agent_id)
-                            agent_display_name = "Unknown Agent"
-                            if agent_data and "config" in agent_data:
-                                from app.models.agent_config import AgentConfig
-                                agent_config = AgentConfig.from_dict(agent_data["config"])
-                                agent_display_name = agent_config.profile.doctor_display_name
-                            
-                            # Create notification service
-                            # Note: TelegramService requires channel_binding_service for some methods,
-                            # but send_notification_message doesn't need it, so we can pass a dummy
-                            # For notifications, we only use send_notification_message which doesn't use channel_binding_service
-                            secrets_manager = get_secrets_manager()
-                            settings = get_settings()
-                            from app.services.channel_binding_service import ChannelBindingService
-                            # Create a minimal ChannelBindingService instance (won't be used for notifications)
-                            channel_binding_service = ChannelBindingService(self, secrets_manager)
-                            telegram_service = TelegramService(
-                                channel_binding_service=channel_binding_service,
-                                dynamodb=self,
-                                settings=settings
-                            )
-                            notification_service = NotificationService(
-                                dynamodb=self,
-                                secrets_manager=secrets_manager,
-                                telegram_service=telegram_service
-                            )
-                            
-                            # Send notifications (async, non-blocking)
-                            # Use asyncio.create_task to not block the main flow
-                            asyncio.create_task(
-                                notification_service.send_escalation_notification(
-                                    conversation=updated_conversation,
-                                    escalation_reason=handoff_reason or "Escalation required",
-                                    agent_display_name=agent_display_name
+                            # Import here to avoid circular dependencies and handle missing modules gracefully
+                            try:
+                                from app.services.notification_service import NotificationService
+                                from app.services.telegram_service import TelegramService
+                                from app.storage.secrets import get_secrets_manager
+                                from app.config import get_settings
+                            except ImportError as import_error:
+                                logger.debug(
+                                    f"Notification service modules not available: {import_error}. "
+                                    "Skipping notification sending."
                                 )
-                            )
+                                # Skip notification sending if modules are not available
+                                pass
+                            else:
+                                # Get agent display name for notification
+                                agent_data = await self.get_agent(updated_conversation.agent_id)
+                                agent_display_name = "Unknown Agent"
+                                if agent_data and "config" in agent_data:
+                                    from app.models.agent_config import AgentConfig
+                                    agent_config = AgentConfig.from_dict(agent_data["config"])
+                                    agent_display_name = agent_config.profile.doctor_display_name
+                                
+                                # Create notification service
+                                # Note: TelegramService requires channel_binding_service for some methods,
+                                # but send_notification_message doesn't need it, so we can pass a dummy
+                                # For notifications, we only use send_notification_message which doesn't use channel_binding_service
+                                secrets_manager = get_secrets_manager()
+                                settings = get_settings()
+                                from app.services.channel_binding_service import ChannelBindingService
+                                # Create a minimal ChannelBindingService instance (won't be used for notifications)
+                                channel_binding_service = ChannelBindingService(self, secrets_manager)
+                                telegram_service = TelegramService(
+                                    channel_binding_service=channel_binding_service,
+                                    dynamodb=self,
+                                    settings=settings
+                                )
+                                notification_service = NotificationService(
+                                    dynamodb=self,
+                                    secrets_manager=secrets_manager,
+                                    telegram_service=telegram_service
+                                )
+                                
+                                # Send notifications (async, non-blocking)
+                                # Use asyncio.create_task to not block the main flow
+                                asyncio.create_task(
+                                    notification_service.send_escalation_notification(
+                                        conversation=updated_conversation,
+                                        escalation_reason=handoff_reason or "Escalation required",
+                                        agent_display_name=agent_display_name
+                                    )
+                                )
                         except Exception as e:
                             # Don't fail the update if notification fails
                             logger.warning(
