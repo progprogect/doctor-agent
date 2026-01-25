@@ -115,7 +115,7 @@ async def set_webhook(
             detail=f"Binding {binding_id} not found",
         )
 
-    if binding.channel_type.value != "telegram":
+    if binding.channel_type != "telegram":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Binding {binding_id} is not a Telegram binding",
@@ -175,7 +175,7 @@ async def get_webhook_status(
             detail=f"Binding {binding_id} not found",
         )
 
-    if binding.channel_type.value != "telegram":
+    if binding.channel_type != "telegram":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Binding {binding_id} is not a Telegram binding",
