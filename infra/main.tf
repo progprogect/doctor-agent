@@ -276,6 +276,25 @@ resource "aws_dynamodb_table" "sessions" {
   )
 }
 
+resource "aws_dynamodb_table" "notification_configs" {
+  name         = "doctor-agent-notification-configs"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key = "config_id"
+
+  attribute {
+    name = "config_id"
+    type = "S"
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "NotificationConfigs"
+    }
+  )
+}
+
 resource "aws_dynamodb_table" "rag_documents" {
   name         = "doctor-agent-rag-documents"
   billing_mode = "PAY_PER_REQUEST"

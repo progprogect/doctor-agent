@@ -108,6 +108,7 @@ resource "aws_iam_role_policy" "ecs_task" {
           aws_dynamodb_table.sessions.arn,
           aws_dynamodb_table.rag_documents.arn,
           aws_dynamodb_table.instagram_profiles.arn,
+          aws_dynamodb_table.notification_configs.arn,
           "${aws_dynamodb_table.agents.arn}/*",
           "${aws_dynamodb_table.conversations.arn}/*",
           "${aws_dynamodb_table.messages.arn}/*",
@@ -115,7 +116,8 @@ resource "aws_iam_role_policy" "ecs_task" {
           "${aws_dynamodb_table.audit_logs.arn}/*",
           "${aws_dynamodb_table.sessions.arn}/*",
           "${aws_dynamodb_table.rag_documents.arn}/*",
-          "${aws_dynamodb_table.instagram_profiles.arn}/*"
+          "${aws_dynamodb_table.instagram_profiles.arn}/*",
+          "${aws_dynamodb_table.notification_configs.arn}/*"
         ]
       },
       {
@@ -138,7 +140,9 @@ resource "aws_iam_role_policy" "ecs_task" {
         ]
         Resource = [
           "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/channels/*",
-          "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/channels/*-*"
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/channels/*-*",
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/notifications/*",
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:doctor-agent/notifications/*-*"
         ]
       }
     ]
