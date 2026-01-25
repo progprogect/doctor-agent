@@ -86,6 +86,7 @@ async def handle_webhook(
 @router.post("/telegram/webhook/{binding_id}/set")
 async def set_webhook(
     binding_id: str,
+    deps: CommonDependencies = Depends(),
     telegram_service: TelegramService = Depends(get_telegram_service),
     _admin: str = require_admin(),
 ):
@@ -147,6 +148,7 @@ async def set_webhook(
 @router.get("/telegram/webhook/{binding_id}/status")
 async def get_webhook_status(
     binding_id: str,
+    deps: CommonDependencies = Depends(),
     telegram_service: TelegramService = Depends(get_telegram_service),
     _admin: str = require_admin(),
 ):
