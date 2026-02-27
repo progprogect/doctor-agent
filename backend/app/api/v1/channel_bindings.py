@@ -12,7 +12,7 @@ from app.dependencies import CommonDependencies
 from app.utils.datetime_utils import to_utc_iso_string
 from app.models.channel_binding import ChannelBinding, ChannelType
 from app.services.channel_binding_service import ChannelBindingService
-from app.storage.secrets import get_secrets_manager
+from app.storage.resolver import get_secrets_manager
 from app.utils.enum_helpers import get_enum_value
 
 logger = logging.getLogger(__name__)

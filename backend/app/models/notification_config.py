@@ -22,9 +22,13 @@ class NotificationConfig(BaseModel):
     notification_type: NotificationType = Field(
         ..., description="Type of notification channel"
     )
-    bot_token_secret_name: str = Field(
-        ...,
-        description="Name of secret in AWS Secrets Manager containing bot token",
+    bot_token_secret_name: Optional[str] = Field(
+        default=None,
+        description="Name of secret in AWS Secrets Manager, or config_id for PostgreSQL",
+    )
+    encrypted_bot_token: Optional[str] = Field(
+        default=None,
+        description="Encrypted bot token (PostgreSQL backend only)",
     )
     chat_id: str = Field(..., description="Telegram chat ID for receiving notifications")
     is_active: bool = Field(

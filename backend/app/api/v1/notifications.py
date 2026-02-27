@@ -14,7 +14,8 @@ from app.models.notification_config import NotificationConfig, NotificationType
 from app.services.channel_binding_service import ChannelBindingService
 from app.services.telegram_service import TelegramService
 from app.storage.dynamodb import DynamoDBClient
-from app.storage.secrets import SecretsManager, get_secrets_manager
+from app.storage.resolver import get_secrets_manager
+from app.storage.secrets import SecretsManager
 from app.utils.datetime_utils import to_utc_iso_string
 from app.utils.enum_helpers import get_enum_value
 from app.config import get_settings

@@ -14,6 +14,7 @@ from tenacity import (
 
 from app.config import Settings, get_settings
 from app.storage.secrets import SecretsManager, get_secrets_manager
+from app.storage.postgres_secrets import PostgresSecretsManager, get_postgres_secrets_manager
 from app.utils.model_params import requires_max_completion_tokens
 
 logger = logging.getLogger(__name__)
@@ -219,7 +220,10 @@ class LLMFactory:
 def get_llm_factory() -> LLMFactory:
     """Get cached LLM factory instance."""
     settings = get_settings()
-    secrets_manager = get_secrets_manager()
+    if settings.database_backend == "postgres":
+        secrets_manager = get_postgres_secrets_manager()
+    else:
+        secrets_manager = get_secrets_manager()
     return LLMFactory(settings, secrets_manager)
 
 

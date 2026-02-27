@@ -46,27 +46,32 @@ async def lifespan(app: FastAPI):
             "app_name": settings.app_name,
             "version": settings.app_version,
             "environment": settings.environment,
+            "database_backend": settings.database_backend,
         },
     )
+    # Initialize PostgreSQL pool when using postgres backend
+    if settings.database_backend == "postgres":
+        from app.storage.postgres import get_pool
+        await get_pool()
+        logger.info("PostgreSQL connection pool initialized")
     # Clear all caches on startup to ensure fresh state
-    from app.storage.secrets import get_secrets_manager
+    from app.storage.resolver import get_secrets_manager
     from app.utils.openai_client import get_llm_factory
-    from functools import lru_cache
-    
-    # Clear instance caches
+
     secrets_manager = get_secrets_manager()
-    secrets_manager.clear_cache()  # Clear all secret caches
-    
+    if hasattr(secrets_manager, "clear_cache"):
+        secrets_manager.clear_cache()
+
     llm_factory = get_llm_factory()
-    llm_factory.clear_cache()  # Clear all client caches
-    
-    # Clear lru_cache for factory functions to force fresh instances
-    get_secrets_manager.cache_clear()  # type: ignore
-    get_llm_factory.cache_clear()  # type: ignore
-    
+    llm_factory.clear_cache()
+
     logger.info("All caches cleared on startup")
     yield
     # Shutdown
+    if settings.database_backend == "postgres":
+        from app.storage.postgres import close_pool
+        await close_pool()
+        logger.info("PostgreSQL connection pool closed")
     logger.info("Application shutting down")
 
 

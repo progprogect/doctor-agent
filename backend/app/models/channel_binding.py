@@ -31,9 +31,14 @@ class ChannelBinding(BaseModel):
     )
 
     # Reference to secret in Secrets Manager (NOT the token itself!)
-    secret_name: str = Field(
-        ...,
-        description="Name of secret in AWS Secrets Manager containing access token",
+    # When using PostgreSQL, secret_name may be binding_id for lookup; token stored in encrypted_access_token
+    secret_name: Optional[str] = Field(
+        default=None,
+        description="Name of secret in AWS Secrets Manager, or binding_id for PostgreSQL",
+    )
+    encrypted_access_token: Optional[str] = Field(
+        default=None,
+        description="Encrypted access token (PostgreSQL backend only)",
     )
 
     # Binding status

@@ -31,7 +31,7 @@ async def simulate_instagram_webhook(
         # Forward to Instagram service directly
         from app.services.instagram_service import InstagramService
         from app.services.channel_binding_service import ChannelBindingService
-        from app.storage.secrets import get_secrets_manager
+        from app.storage.resolver import get_secrets_manager
         from app.config import get_settings
         
         settings = get_settings()

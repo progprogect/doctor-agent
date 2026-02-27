@@ -83,7 +83,7 @@ class InstagramSender(ChannelSender):
 
             # Find binding by agent_id
             from app.services.channel_binding_service import ChannelBindingService
-            from app.storage.secrets import get_secrets_manager
+            from app.storage.resolver import get_secrets_manager
 
             secrets_manager = get_secrets_manager()
             binding_service = ChannelBindingService(self.dynamodb, secrets_manager)
@@ -153,7 +153,7 @@ class TelegramSender(ChannelSender):
 
             # Find binding by agent_id
             from app.services.channel_binding_service import ChannelBindingService
-            from app.storage.secrets import get_secrets_manager
+            from app.storage.resolver import get_secrets_manager
 
             secrets_manager = get_secrets_manager()
             binding_service = ChannelBindingService(self.dynamodb, secrets_manager)

@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.dependencies import CommonDependencies
 from app.services.channel_binding_service import ChannelBindingService
 from app.services.instagram_service import InstagramService
-from app.storage.secrets import get_secrets_manager
+from app.storage.resolver import get_secrets_manager
 
 logger = logging.getLogger(__name__)
 

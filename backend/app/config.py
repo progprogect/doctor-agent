@@ -44,7 +44,32 @@ class Settings(BaseSettings):
         default=1536, description="Embedding dimensions"
     )
 
-    # AWS
+    # Database (PostgreSQL for Railway)
+    database_url: Optional[str] = Field(
+        default=None,
+        description="PostgreSQL connection URL (DATABASE_URL or DATABASE_PUBLIC_URL)",
+        alias="DATABASE_URL",
+    )
+    database_public_url: Optional[str] = Field(
+        default=None,
+        description="PostgreSQL public URL for migrations",
+        alias="DATABASE_PUBLIC_URL",
+    )
+    database_backend: str = Field(
+        default="postgres",
+        description="Storage backend: postgres | dynamodb",
+    )
+    secret_encryption_key: Optional[str] = Field(
+        default=None,
+        description="Fernet key for encrypting channel/notification tokens (32 bytes base64)",
+        alias="SECRET_ENCRYPTION_KEY",
+    )
+
+    def get_database_url(self) -> Optional[str]:
+        """Get database URL (DATABASE_URL or DATABASE_PUBLIC_URL fallback)."""
+        return self.database_url or self.database_public_url
+
+    # AWS (optional, for dynamodb backend)
     aws_region: str = Field(default="us-east-1", description="AWS region")
     aws_access_key_id: Optional[str] = Field(default=None, description="AWS access key")
     aws_secret_access_key: Optional[str] = Field(

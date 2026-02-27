@@ -124,10 +124,10 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str):
     try:
         # Get dependencies (simplified - in production use proper DI)
         from app.config import get_settings
-        from app.storage.dynamodb import get_dynamodb_client
+        from app.dependencies import get_dynamodb
 
         settings = get_settings()
-        dynamodb = get_dynamodb_client()
+        dynamodb = get_dynamodb()
         conversation_service = ConversationService(dynamodb)
 
         # Verify conversation exists

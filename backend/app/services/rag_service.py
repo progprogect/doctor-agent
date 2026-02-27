@@ -6,8 +6,10 @@ from typing import Optional
 
 from app.api.exceptions import RAGServiceError
 from app.chains.rag_chain import RAGChain
+from app.config import get_settings
 from app.services.llm_factory import LLMFactory, get_llm_factory
 from app.storage.dynamodb_rag import DynamoDBRAGClient, get_dynamodb_rag_client
+from app.storage.postgres_rag import PostgresRAGClient, get_postgres_rag_client
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,7 @@ class RAGService:
     def __init__(
         self,
         llm_factory: LLMFactory,
-        rag_client: DynamoDBRAGClient,
+        rag_client: DynamoDBRAGClient | PostgresRAGClient,
     ):
         """Initialize RAG service."""
         self.llm_factory = llm_factory
@@ -195,6 +197,9 @@ class RAGService:
 def get_rag_service() -> RAGService:
     """Get cached RAG service instance."""
     llm_factory = get_llm_factory()
-    rag_client = get_dynamodb_rag_client()
+    if get_settings().database_backend == "postgres":
+        rag_client = get_postgres_rag_client()
+    else:
+        rag_client = get_dynamodb_rag_client()
     return RAGService(llm_factory, rag_client)
 

@@ -238,7 +238,7 @@ class DynamoDBClient:
                             try:
                                 from app.services.notification_service import NotificationService
                                 from app.services.telegram_service import TelegramService
-                                from app.storage.secrets import get_secrets_manager
+                                from app.storage.resolver import get_secrets_manager
                                 from app.config import get_settings
                             except ImportError as import_error:
                                 logger.debug(

@@ -7,6 +7,7 @@ from langchain_openai import OpenAIEmbeddings
 from app.config import get_settings
 from app.services.llm_factory import LLMFactory
 from app.storage.dynamodb_rag import DynamoDBRAGClient
+from app.storage.postgres_rag import PostgresRAGClient
 
 
 class RAGChain:
@@ -15,7 +16,7 @@ class RAGChain:
     def __init__(
         self,
         llm_factory: LLMFactory,
-        rag_client: DynamoDBRAGClient,
+        rag_client: DynamoDBRAGClient | PostgresRAGClient,
     ):
         """Initialize RAG chain."""
         self.llm_factory = llm_factory

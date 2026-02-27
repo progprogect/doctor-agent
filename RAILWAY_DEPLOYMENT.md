@@ -1,74 +1,72 @@
 # Развёртывание AI Agents CRM на Railway
 
-Документ описывает адаптацию проекта для развёртывания на [Railway](https://railway.app), список переменных окружения и шаги настройки.
+Документ описывает адаптацию проекта для развёртывания на [Railway](https://railway.app) **без AWS** — все сервисы на Railway.
 
 ---
 
-## 1. Анализ текущей архитектуры
+## 1. Целевая архитектура (100% Railway)
 
-### Зависимости проекта
+### Стек на Railway
 
-| Компонент | Использование | Railway-совместимость |
-|-----------|----------------|------------------------|
-| **DynamoDB** | Основное хранилище (conversations, messages, agents, audit_logs, channel_bindings, instagram_profiles, notification_configs, RAG documents) | ✅ Подключается через AWS credentials |
-| **OpenSearch** | Не используется (заменён на DynamoDB RAG) | ⏭️ Пропустить |
-| **Redis** | Не используется (заменён на DynamoDB Cache) | ⏭️ Пропустить |
-| **AWS Secrets Manager** | Опционально для OpenAI API key | ⚠️ Можно заменить на `OPENAI_API_KEY` в env |
-| **OpenAI API** | LLM, embeddings, moderation | ✅ Через env `OPENAI_API_KEY` |
+| Компонент | Railway-сервис | Назначение |
+|-----------|----------------|------------|
+| **База данных** | PostgreSQL (с pgvector) | Все данные: диалоги, сообщения, агенты, аудит, RAG-документы |
+| **Кэш** | Redis (опционально) | Сессии, кэш. Можно обойтись без него на старте. |
+| **Backend** | FastAPI (Docker) | API, WebSocket, бизнес-логика |
+| **Frontend** | Next.js (Docker) | UI чата и админки |
+| **Секреты** | Railway Variables | OpenAI API key, ADMIN_TOKEN и др. |
 
-### Вывод
+### Что убираем
 
-Проект уже оптимизирован: **Redis и OpenSearch не требуются**. Используются DynamoDB (данные + кэш + RAG). Для Railway достаточно:
-
-1. Подключить DynamoDB (через AWS credentials или managed DynamoDB)
-2. Задать переменные окружения
-3. Адаптировать PORT (уже сделано в Dockerfile)
+- **AWS DynamoDB** → PostgreSQL
+- **AWS Secrets Manager** → Railway Variables
+- **AWS credentials** → не нужны
 
 ---
 
-## 2. Адаптации для Railway
+## 2. Текущее состояние и миграция
 
-### 2.1 Выполненные изменения
+Проект сейчас использует **DynamoDB**. Для работы полностью на Railway нужна миграция на PostgreSQL.
 
-- **Backend Dockerfile**: использует `PORT` из окружения (Railway передаёт его автоматически), fallback 8000 для локальной разработки.
-- **Healthcheck**: проверяет порт из `PORT`.
+### Объём работ
 
-### 2.2 Структура деплоя на Railway
+| Слой | Текущее | Целевое | Оценка |
+|------|---------|---------|--------|
+| Хранилище | `storage/dynamodb.py` | PostgreSQL (SQLAlchemy/asyncpg) | Средняя |
+| Кэш | `storage/dynamodb_cache.py` | Redis или in-memory | Низкая |
+| RAG | `storage/dynamodb_rag.py` | PostgreSQL + pgvector | Средняя |
+| Secrets | AWS Secrets Manager | Env-переменные | Уже поддерживается |
+| Конфиг | `config.py` | Добавить `DATABASE_URL`, убрать AWS | Низкая |
 
-Рекомендуемая схема — **два сервиса**:
+### Порядок миграции
 
-1. **Backend** (FastAPI) — корневая папка `backend/`, Dockerfile
-2. **Frontend** (Next.js) — корневая папка `frontend/`, Dockerfile
-
-Либо один сервис, если frontend раздаётся через backend (потребует доработки).
-
-### 2.3 База данных
-
-База создаётся отдельно. Варианты:
-
-- **AWS DynamoDB** — создать таблицы в AWS и подключить через credentials.
-- **DynamoDB Local / альтернативы** — если планируется миграция на другую БД, это отдельный этап.
-
-Подключение в Railway — через переменные окружения (см. раздел 4).
+1. Добавить PostgreSQL-клиент и модели (SQLAlchemy + asyncpg).
+2. Создать миграции (Alembic) для всех таблиц.
+3. Реализовать PostgreSQL-адаптеры вместо DynamoDB.
+4. RAG: перейти на pgvector.
+5. Кэш: Redis (Railway addon) или простой in-memory для MVP.
+6. Удалить зависимости на boto3, AWS.
 
 ---
 
-## 3. Создание таблиц DynamoDB
+## 3. Сервисы Railway
 
-Если используется AWS DynamoDB, таблицы создаются через Terraform (`infra/`) или вручную. Список таблиц:
+### 3.1 PostgreSQL + pgvector
 
-| Таблица | Назначение |
-|---------|------------|
-| `doctor-agent-conversations` | Диалоги |
-| `doctor-agent-messages` | Сообщения |
-| `doctor-agent-agents` | Конфигурация агентов |
-| `doctor-agent-audit-logs` | Аудит |
-| `doctor-agent-channel-bindings` | Привязки каналов (Instagram, Telegram) |
-| `doctor-agent-instagram-profiles` | Профили Instagram |
-| `doctor-agent-notification-configs` | Конфигурация уведомлений |
-| `doctor-agent-rag-documents` | RAG-документы (векторный поиск) |
+- Добавить через Railway: **New → Database → PostgreSQL** или шаблон **Postgres with pgvector**.
+- Railway создаёт `DATABASE_URL` и подставляет его в переменные связанного сервиса.
+- pgvector — для векторного поиска RAG.
 
-Схемы таблиц — в `infra/main.tf`.
+### 3.2 Redis (опционально)
+
+- **New → Database → Redis**.
+- Появляется `REDIS_URL`.
+- Можно отложить и использовать in-memory кэш.
+
+### 3.3 Backend и Frontend
+
+- Два сервиса из репозитория с Dockerfile.
+- Root Directory: `backend` и `frontend`.
 
 ---
 
@@ -76,92 +74,61 @@
 
 ### 4.1 Backend (обязательные)
 
-| Переменная | Описание | Пример |
+| Переменная | Описание | Откуда |
 |------------|----------|--------|
-| `OPENAI_API_KEY` | Ключ OpenAI API | `sk-...` |
-| `ADMIN_TOKEN` | Токен для админ-API | Случайная строка (например, `openssl rand -hex 32`) |
-| `AWS_ACCESS_KEY_ID` | AWS Access Key (для DynamoDB) | `AKIA...` |
-| `AWS_SECRET_ACCESS_KEY` | AWS Secret Key | `...` |
-| `AWS_REGION` | Регион AWS | `us-east-1` |
+| `OPENAI_API_KEY` | Ключ OpenAI API | Задать вручную |
+| `ADMIN_TOKEN` | Токен для админ-API | Сгенерировать (`openssl rand -hex 32`) |
+| `DATABASE_URL` | PostgreSQL connection string | Автоматически от Railway PostgreSQL |
 
-### 4.2 Backend (DynamoDB — подключение)
-
-| Переменная | Описание |
-|------------|----------|
-| `DYNAMODB_ENDPOINT_URL` | **Не задавать** для AWS DynamoDB. Задавать только для DynamoDB Local или совместимых сервисов. |
-
-### 4.3 Backend (DynamoDB — имена таблиц)
-
-Если имена таблиц отличаются от дефолтных:
-
-| Переменная | По умолчанию |
-|------------|--------------|
-| `DYNAMODB_TABLE_CONVERSATIONS` | `doctor-agent-conversations` |
-| `DYNAMODB_TABLE_MESSAGES` | `doctor-agent-messages` |
-| `DYNAMODB_TABLE_AGENTS` | `doctor-agent-agents` |
-| `DYNAMODB_TABLE_AUDIT_LOGS` | `doctor-agent-audit-logs` |
-| `DYNAMODB_TABLE_CHANNEL_BINDINGS` | `doctor-agent-channel-bindings` |
-| `DYNAMODB_TABLE_INSTAGRAM_PROFILES` | `doctor-agent-instagram-profiles` |
-| `DYNAMODB_TABLE_NOTIFICATION_CONFIGS` | `doctor-agent-notification-configs` |
-
-Таблица RAG (`doctor-agent-rag-documents`) задаётся в коде; при необходимости её можно вынести в конфиг.
-
-### 4.4 Backend (опциональные)
+### 4.2 Backend (опциональные)
 
 | Переменная | Описание | По умолчанию |
 |------------|----------|--------------|
 | `ENVIRONMENT` | Окружение | `production` |
 | `DEBUG` | Режим отладки | `false` |
-| `CORS_ORIGINS` | CORS (JSON-массив или через запятую) | `["https://your-frontend.railway.app"]` |
+| `CORS_ORIGINS` | CORS (JSON или через запятую) | `["https://your-frontend.railway.app"]` |
 | `RATE_LIMIT_PER_MINUTE` | Лимит запросов в минуту | `60` |
 | `OPENAI_MODEL` | Модель OpenAI | `gpt-4o-mini` |
 | `MESSAGE_TTL_HOURS` | TTL сообщений (часы) | `48` |
 
-### 4.5 Backend (каналы — при использовании)
+### 4.3 Backend (Redis — при использовании)
+
+| Переменная | Описание |
+|------------|----------|
+| `REDIS_URL` | Connection string Redis | Автоматически от Railway Redis |
+
+### 4.4 Backend (каналы — при использовании)
 
 | Переменная | Описание |
 |------------|----------|
 | `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` | Токен верификации webhook Instagram |
 | `INSTAGRAM_APP_SECRET` | App Secret для проверки подписи webhook |
 
-### 4.6 Backend (Secrets Manager — опционально)
-
-Если OpenAI API key хранится в AWS Secrets Manager вместо env:
+### 4.5 Frontend (при отдельном деплое)
 
 | Переменная | Описание |
 |------------|----------|
-| `SECRETS_MANAGER_OPENAI_KEY_NAME` | Имя секрета в Secrets Manager |
-| `SECRETS_MANAGER_REGION` | Регион Secrets Manager (если отличается от AWS_REGION) |
+| `NEXT_PUBLIC_API_URL` | URL backend API |
+| `NEXT_PUBLIC_WS_URL` | URL WebSocket backend |
 
-При наличии `OPENAI_API_KEY` в env Secrets Manager не используется.
-
-### 4.7 Frontend (обязательные при отдельном деплое)
-
-| Переменная | Описание | Пример |
-|------------|----------|--------|
-| `NEXT_PUBLIC_API_URL` | URL backend API | `https://your-backend.railway.app` |
-| `NEXT_PUBLIC_WS_URL` | URL WebSocket | `wss://your-backend.railway.app` |
-
-Если frontend и backend на одном домене (через proxy), можно использовать относительные URL — тогда эти переменные не нужны.
-
-### 4.8 Railway-специфичные
+### 4.6 Railway-специфичные
 
 | Переменная | Описание |
 |------------|----------|
-| `PORT` | Задаётся Railway автоматически. Backend уже использует его. |
+| `PORT` | Задаётся Railway автоматически |
 
 ---
 
 ## 5. Минимальный набор для стабильной работы
 
-### Backend
+### Backend (после миграции на PostgreSQL)
 
 ```
 OPENAI_API_KEY=sk-...
 ADMIN_TOKEN=<сгенерировать>
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=us-east-1
+DATABASE_URL=<автоматически от Railway PostgreSQL>
+DATABASE_BACKEND=postgres
+SECRET_ENCRYPTION_KEY=<сгенерировать: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
 ENVIRONMENT=production
 DEBUG=false
 CORS_ORIGINS=["https://your-frontend.railway.app"]
@@ -179,25 +146,34 @@ NEXT_PUBLIC_WS_URL=wss://your-backend.railway.app
 ## 6. Шаги развёртывания
 
 1. Создать проект в Railway.
-2. Создать сервис Backend:
-   - Root Directory: `backend`
-   - Dockerfile: `backend/Dockerfile`
-   - Добавить переменные окружения из раздела 5.
-3. Создать сервис Frontend (если нужен):
-   - Root Directory: `frontend`
-   - Dockerfile: `frontend/Dockerfile`
-   - Добавить `NEXT_PUBLIC_API_URL` и `NEXT_PUBLIC_WS_URL` с URL backend.
-4. Создать и подключить DynamoDB (AWS или другой провайдер).
-5. Сгенерировать домены в Railway для backend и frontend.
-6. Обновить `CORS_ORIGINS` на фактический URL frontend.
+2. Добавить PostgreSQL (с pgvector):
+   - New → Database → **Postgres with pgvector** (или PostgreSQL + включить pgvector).
+3. Добавить Redis (опционально):
+   - New → Database → Redis.
+4. Создать сервис Backend:
+   - Connect repo → выбрать `backend/` как Root Directory.
+   - Подключить PostgreSQL (Reference → Variables).
+   - Добавить `OPENAI_API_KEY`, `ADMIN_TOKEN`, `CORS_ORIGINS`.
+5. Создать сервис Frontend:
+   - Connect repo → Root Directory: `frontend`.
+   - Добавить `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`.
+6. Сгенерировать домены для backend и frontend.
+7. Обновить `CORS_ORIGINS` на фактический URL frontend.
 
 ---
 
-## 7. Проверка после деплоя
+## 7. Схема PostgreSQL (после миграции)
 
-- Backend: `https://your-backend.railway.app/health` → `{"status":"healthy",...}`
-- API docs: `https://your-backend.railway.app/docs`
-- Frontend: открыть в браузере и проверить чат и админку.
+Основные сущности:
+
+- `conversations` — диалоги
+- `messages` — сообщения
+- `agents` — конфигурация агентов
+- `audit_logs` — аудит
+- `channel_bindings` — привязки каналов
+- `instagram_profiles` — профили Instagram
+- `notification_configs` — конфигурация уведомлений
+- `rag_documents` — RAG-документы (с полем `embedding` типа vector)
 
 ---
 
@@ -205,14 +181,15 @@ NEXT_PUBLIC_WS_URL=wss://your-backend.railway.app
 
 | Риск | Рекомендация |
 |------|--------------|
-| AWS credentials в env | Использовать Railway Variables (зашифрованы). Для production — рассмотреть IAM roles / OIDC. |
-| Cold start | Railway может останавливать неактивные сервисы. Настроить Always-on при необходимости. |
-| WebSocket | Railway поддерживает WebSocket. Убедиться, что URL frontend использует `wss://` для production. |
+| Cold start | Включить Always-on при необходимости |
+| WebSocket | Использовать `wss://` для production |
+| Регион | Railway сам выбирает регион; при необходимости можно указать в настройках проекта |
 
 ---
 
 ## 9. Ссылки
 
-- [Railway Docs — Variables](https://docs.railway.app/reference/variables)
-- [Railway Docs — Healthchecks](https://docs.railway.app/diagnose/healthchecks)
+- [Railway — Databases](https://docs.railway.app/guides/databases)
+- [Railway — PostgreSQL + pgvector](https://railway.com/deploy/postgres-with-pgvector-engine)
+- [Railway — Variables](https://docs.railway.app/reference/variables)
 - Репозиторий: [AI-Agents-CRM](https://github.com/progprogect/AI-Agents-CRM)

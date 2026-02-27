@@ -11,7 +11,7 @@ from app.api.auth import require_admin
 from app.dependencies import CommonDependencies
 from app.services.channel_binding_service import ChannelBindingService
 from app.services.telegram_service import TelegramService
-from app.storage.secrets import get_secrets_manager
+from app.storage.resolver import get_secrets_manager
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ async def set_webhook(
 
     # Get binding to verify it exists
     from app.services.channel_binding_service import ChannelBindingService
-    from app.storage.secrets import get_secrets_manager
+    from app.storage.resolver import get_secrets_manager
 
     secrets_manager = get_secrets_manager()
     binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
@@ -163,7 +163,7 @@ async def get_webhook_status(
 
     # Get binding to verify it exists
     from app.services.channel_binding_service import ChannelBindingService
-    from app.storage.secrets import get_secrets_manager
+    from app.storage.resolver import get_secrets_manager
 
     secrets_manager = get_secrets_manager()
     binding_service = ChannelBindingService(deps.dynamodb, secrets_manager)
