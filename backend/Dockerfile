@@ -20,15 +20,16 @@ COPY app/ ./app/
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Health check
+# Railway и другие платформы передают PORT через env
+# Health check использует PORT для совместимости с Railway
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD sh -c 'curl -f http://localhost:${PORT:-8000}/health || exit 1'
 
-# Порт приложения
+# Порт приложения (Railway задаёт PORT динамически)
 EXPOSE 8000
 
-# Запуск приложения
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Запуск: используем PORT из окружения (Railway) или 8000 по умолчанию
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
 
 
